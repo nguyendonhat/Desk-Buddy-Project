@@ -7,6 +7,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 .page { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
 .card { width: min(100%, 760px); padding: 40px; border: 1px solid #dce6e1; border-radius: 20px; background: #fff; box-shadow: 0 18px 50px rgb(28 65 51 / 8%); }

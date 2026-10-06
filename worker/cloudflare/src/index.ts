@@ -22,15 +22,18 @@ interface GoogleTokens {
 
 interface Connection {
   deviceId: string;
+  connectionId: string;
   email: string;
   tokens: GoogleTokens;
   accessTokenExpiresAt: number;
   connectedAt: number;
   selectedCalendarId?: string;
+  selectedCalendarTimeZone?: string;
 }
 
 interface BrowserSession {
   deviceId: string;
+  connectionId: string;
   createdAt: number;
 }
 
@@ -176,14 +179,18 @@ async function handleOAuthCallback(request: Request, env: Env, url: URL): Promis
     if (!profile.email || profile.email_verified !== true) return frontendRedirect(env, 'error');
 
     const sessionId = randomToken();
+    for (const [existingSessionId, session] of browserSessions) {
+      if (session.deviceId === pending.deviceId) browserSessions.delete(existingSessionId);
+    }
     connections.set(pending.deviceId, {
       deviceId: pending.deviceId,
+      connectionId: sessionId,
       email: profile.email,
       tokens,
       accessTokenExpiresAt: Date.now() + Math.max(0, (tokens.expires_in ?? 3600) - 60) * 1000,
       connectedAt: Date.now(),
     });
-    browserSessions.set(sessionId, { deviceId: pending.deviceId, createdAt: Date.now() });
+    browserSessions.set(sessionId, { deviceId: pending.deviceId, connectionId: sessionId, createdAt: Date.now() });
 
     const response = frontendRedirect(env, 'connected');
     const secure = new URL(env.WEB_ORIGIN).protocol === 'https:';
@@ -209,7 +216,7 @@ function handleConnectionStatus(request: Request, env: Env, url: URL): Response 
     return jsonResponse(request, env, { connected: false });
   }
 
-  const connection = connections.get(deviceId);
+  const connection = connectionForSession(request, deviceId);
   return jsonResponse(request, env, {
     connected: Boolean(connection),
     ...(connection ? { email: connection.email } : {}),
@@ -297,6 +304,7 @@ async function getCalendarEvents(connection: Connection, env: Env, window: Calen
   apiUrl.searchParams.set('maxResults', String(CALENDAR_PAGE_SIZE));
   apiUrl.searchParams.set('singleEvents', 'true');
   apiUrl.searchParams.set('orderBy', 'startTime');
+  if (connection.selectedCalendarTimeZone) apiUrl.searchParams.set('timeZone', connection.selectedCalendarTimeZone);
   if (pageToken) apiUrl.searchParams.set('pageToken', pageToken);
   return authorizedGoogleFetch(connection, env, apiUrl);
 }
@@ -309,6 +317,7 @@ interface CalendarListItem {
   id: string;
   summary?: string;
   primary?: boolean;
+  timeZone?: string;
 }
 
 async function listGoogleCalendars(connection: Connection, env: Env): Promise<CalendarListItem[]> {
@@ -359,13 +368,7 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
   const deviceId = url.searchParams.get('device_id');
   if (!validDeviceId(deviceId)) return jsonResponse(request, env, { success: false, error: 'Invalid device_id' }, 400);
 
-  const sessionId = cookieValue(request, COOKIE_NAME);
-  const session = sessionId ? browserSessions.get(sessionId) : undefined;
-  if (!session || session.deviceId !== deviceId) {
-    return jsonResponse(request, env, { success: false, error: 'Google account is not connected in this browser session.' }, 401);
-  }
-
-  const connection = connections.get(deviceId);
+  const connection = connectionForSession(request, deviceId);
   if (!connection) {
     return jsonResponse(request, env, { success: false, error: 'Google account is not connected. Please connect it again.' }, 401);
   }
@@ -383,6 +386,7 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
     if (!response.ok) {
       console.info('[calendar-debug]', JSON.stringify({
         calendarId: connection.selectedCalendarId,
+        calendarTimeZone: connection.selectedCalendarTimeZone ?? null,
         timeMin: window.timeMin,
         timeMax: window.timeMax,
         googleStatus: response.status,
@@ -408,6 +412,7 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
       }
       console.info('[calendar-debug]', JSON.stringify({
         calendarId: connection.selectedCalendarId,
+        calendarTimeZone: connection.selectedCalendarTimeZone ?? null,
         timeMin: window.timeMin,
         timeMax: window.timeMax,
         googleStatus: response.status,
@@ -436,7 +441,34 @@ function connectionForSession(request: Request, deviceId: string): Connection | 
   const sessionId = cookieValue(request, COOKIE_NAME);
   const session = sessionId ? browserSessions.get(sessionId) : undefined;
   if (!session || session.deviceId !== deviceId) return undefined;
-  return connections.get(deviceId);
+  const connection = connections.get(deviceId);
+  return connection?.connectionId === session.connectionId ? connection : undefined;
+}
+
+function handleOAuthLogout(request: Request, env: Env): Response {
+  const sessionId = cookieValue(request, COOKIE_NAME);
+  const session = sessionId ? browserSessions.get(sessionId) : undefined;
+  if (sessionId) browserSessions.delete(sessionId);
+
+  if (session) {
+    const connection = connections.get(session.deviceId);
+    if (connection?.connectionId === session.connectionId) {
+      connections.delete(session.deviceId);
+      for (const [otherSessionId, otherSession] of browserSessions) {
+        if (otherSession.connectionId === session.connectionId) browserSessions.delete(otherSessionId);
+      }
+    }
+  }
+
+  const secure = new URL(env.WEB_ORIGIN).protocol === 'https:';
+  const headers = corsHeaders(request, env);
+  headers.set('content-type', jsonHeaders['content-type']);
+  headers.set('cache-control', 'no-store');
+  headers.append(
+    'set-cookie',
+    `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? '; Secure' : ''}`,
+  );
+  return Response.json({ success: true }, { status: 200, headers });
 }
 
 async function handleCalendarList(request: Request, env: Env, url: URL): Promise<Response> {
@@ -472,10 +504,12 @@ async function handleCalendarSelection(request: Request, env: Env): Promise<Resp
 
   try {
     const calendars = await listGoogleCalendars(connection, env);
-    if (!calendars.some((calendar) => calendar.id === calendarId)) {
+    const selectedCalendar = calendars.find((calendar) => calendar.id === calendarId);
+    if (!selectedCalendar) {
       return jsonResponse(request, env, { success: false, error: 'Selected calendar is not available to this Google account.' }, 403);
     }
     connection.selectedCalendarId = calendarId;
+    connection.selectedCalendarTimeZone = selectedCalendar.timeZone;
     return jsonResponse(request, env, { success: true });
   } catch (error) {
     if (error instanceof CalendarError) return jsonResponse(request, env, { success: false, error: error.message }, error.status);
@@ -499,6 +533,9 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/api/oauth/connection') {
       return handleConnectionStatus(request, env, url);
+    }
+    if (request.method === 'POST' && url.pathname === '/api/oauth/logout') {
+      return handleOAuthLogout(request, env);
     }
     if (request.method === 'GET' && url.pathname === '/api/calendars') {
       return handleCalendarList(request, env, url);

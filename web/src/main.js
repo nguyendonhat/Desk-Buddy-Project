@@ -6,7 +6,9 @@ const requestedDeviceId = params.get('device_id');
 const deviceId = requestedDeviceId && /^[A-Za-z0-9_-]{1,64}$/.test(requestedDeviceId) ? requestedDeviceId : 'DB001';
 const statusElement = document.querySelector('#connection-status');
 const messageElement = document.querySelector('#message');
+const accountEmailElement = document.querySelector('#account-email');
 const connectButton = document.querySelector('#connect-button');
+const logoutButton = document.querySelector('#logout-button');
 const calendarSection = document.querySelector('#calendar');
 const countElement = document.querySelector('#event-count');
 const calendarMessage = document.querySelector('#calendar-message');
@@ -211,17 +213,71 @@ async function loadConnectionStatus() {
     if (!response.ok) throw new Error('Connection status request failed');
     const result = await response.json();
     if (result.connected) {
-      statusElement.textContent = `Google Calendar đã được kết nối${result.email ? ` (${result.email})` : ''}.`;
+      statusElement.textContent = 'Google Calendar đã kết nối';
       statusElement.classList.add('connected');
-      connectButton.textContent = 'Kết nối lại bằng Google';
+      accountEmailElement.textContent = result.email ? `Tài khoản: ${result.email}` : '';
+      accountEmailElement.hidden = !result.email;
+      connectButton.hidden = true;
+      logoutButton.hidden = false;
       calendarSection.hidden = false;
       await loadCalendars();
     } else {
       statusElement.textContent = 'Chưa kết nối Google Calendar.';
+      statusElement.classList.remove('connected');
+      accountEmailElement.textContent = '';
+      accountEmailElement.hidden = true;
+      connectButton.textContent = 'Đăng nhập bằng Google';
+      connectButton.hidden = false;
+      logoutButton.hidden = true;
       calendarSection.hidden = true;
     }
   } catch {
     statusElement.textContent = 'Không thể kiểm tra kết nối. Hãy kiểm tra Worker local.';
+  }
+}
+
+async function logoutFromGoogle() {
+  logoutButton.disabled = true;
+  logoutButton.textContent = 'Đang đăng xuất…';
+  messageElement.textContent = '';
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/oauth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Không thể đăng xuất.');
+
+    const statusUrl = new URL(`${apiBaseUrl}/api/oauth/connection`);
+    statusUrl.searchParams.set('device_id', deviceId);
+    const statusResponse = await fetch(statusUrl, { credentials: 'include', cache: 'no-store' });
+    if (!statusResponse.ok) throw new Error('Không thể xác nhận trạng thái đăng xuất.');
+    const status = await statusResponse.json();
+    if (status.connected) throw new Error('Phiên Google vẫn đang hoạt động. Hãy thử đăng xuất lại.');
+
+    statusElement.textContent = 'Chưa kết nối Google Calendar.';
+    statusElement.classList.remove('connected');
+    accountEmailElement.textContent = '';
+    accountEmailElement.hidden = true;
+    connectButton.textContent = 'Đăng nhập bằng Google';
+    connectButton.hidden = false;
+    logoutButton.hidden = true;
+    calendarSection.hidden = true;
+    calendarSelect.replaceChildren(new Option('Chọn Google Calendar…', ''));
+    calendarSelect.disabled = true;
+    syncButton.disabled = true;
+    eventList.replaceChildren();
+    countElement.textContent = 'Chưa đồng bộ';
+    calendarMessage.classList.remove('error');
+    calendarMessage.textContent = '';
+    messageElement.textContent = '';
+  } catch (error) {
+    messageElement.textContent = error instanceof Error
+      ? `Đăng xuất chưa thành công: ${error.message}`
+      : 'Đăng xuất chưa thành công. Vui lòng thử lại.';
+  } finally {
+    logoutButton.disabled = false;
+    logoutButton.textContent = 'Đăng xuất';
   }
 }
 
@@ -233,4 +289,5 @@ if (oauthResult) {
 
 syncButton.addEventListener('click', loadCalendar);
 calendarSelect.addEventListener('change', saveCalendarSelection);
+logoutButton.addEventListener('click', logoutFromGoogle);
 loadConnectionStatus();

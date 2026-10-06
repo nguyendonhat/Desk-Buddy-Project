@@ -13,7 +13,9 @@
         <h1 id="title">Desk Buddy</h1>
         <p class="intro">Kết nối Google Calendar để xem các sự kiện sắp tới.</p>
         <div id="connection-status" class="status" role="status" aria-live="polite">Đang kiểm tra trạng thái…</div>
+        <p id="account-email" class="account-email" hidden></p>
         <a id="connect-button" class="button" href="#">Đăng nhập bằng Google</a>
+        <button id="logout-button" class="button secondary logout-button" type="button" hidden>Đăng xuất</button>
         <p id="message" class="hint"></p>
         <p class="device">Thiết bị: <strong id="device-id"></strong></p>
         <section id="calendar" class="calendar" aria-labelledby="calendar-title" hidden>

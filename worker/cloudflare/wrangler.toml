@@ -1,0 +1,6 @@
+name = "desk-buddy-worker"
+main = "src/index.ts"
+compatibility_date = "2026-10-06"
+
+[vars]
+APP_ENV = "local"

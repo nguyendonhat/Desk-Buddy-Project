@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local-only Worker secrets when future tasks require them.
+# Do not commit .dev.vars or put real credentials in this example file.
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=

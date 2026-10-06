@@ -10,12 +10,29 @@
     <main class="page">
       <section class="card" aria-labelledby="title">
         <p class="eyebrow">DESK BUDDY</p>
-        <h1 id="title">Kết nối Google Calendar</h1>
-        <p class="intro">Cho phép Desk Buddy đọc lịch Google của bạn. Ứng dụng chỉ yêu cầu quyền đọc lịch.</p>
+        <h1 id="title">Desk Buddy</h1>
+        <p class="intro">Kết nối Google Calendar để xem các sự kiện sắp tới.</p>
         <div id="connection-status" class="status" role="status" aria-live="polite">Đang kiểm tra trạng thái…</div>
         <a id="connect-button" class="button" href="#">Đăng nhập bằng Google</a>
         <p id="message" class="hint"></p>
         <p class="device">Thiết bị: <strong id="device-id"></strong></p>
+        <section id="calendar" class="calendar" aria-labelledby="calendar-title" hidden>
+          <div class="calendar-heading">
+            <div>
+              <h2 id="calendar-title">Google Calendar</h2>
+              <p id="event-count" class="event-count">Chưa đồng bộ</p>
+            </div>
+            <button id="sync-button" class="button secondary" type="button">Đồng bộ Google Calendar</button>
+          </div>
+          <div class="calendar-picker">
+            <label for="calendar-select">Chọn calendar cần hiển thị</label>
+            <select id="calendar-select" disabled>
+              <option value="">Đang tải danh sách calendar…</option>
+            </select>
+          </div>
+          <p id="calendar-message" class="calendar-message" role="status" aria-live="polite"></p>
+          <ul id="event-list" class="event-list"></ul>
+        </section>
       </section>
     </main>
     <script type="module" src="/src/main.js"></script>

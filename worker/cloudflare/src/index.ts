@@ -346,20 +346,31 @@ async function listGoogleCalendars(connection: Connection, env: Env): Promise<Ca
   return calendars;
 }
 
-function normalizeCalendarEvent(event: {
+export function normalizeCalendarEvent(event: {
   summary?: string;
   description?: string;
-  start?: { dateTime?: string; date?: string };
-  end?: { dateTime?: string; date?: string };
-}): { title: string; start: string; end: string; description: string } | undefined {
+  start?: { dateTime?: string; date?: string; timeZone?: string };
+  end?: { dateTime?: string; date?: string; timeZone?: string };
+}, calendarTimeZone?: string): {
+  title: string;
+  start: string;
+  end: string;
+  description: string;
+  start_time_zone?: string;
+  end_time_zone?: string;
+} | undefined {
   const start = event.start?.dateTime ?? event.start?.date;
   const end = event.end?.dateTime ?? event.end?.date;
   if (!start || !end) return undefined;
+  const startTimeZone = event.start?.timeZone ?? calendarTimeZone;
+  const endTimeZone = event.end?.timeZone ?? calendarTimeZone;
   return {
     title: event.summary ?? '',
     start,
     end,
     description: event.description ?? '',
+    ...(startTimeZone ? { start_time_zone: startTimeZone } : {}),
+    ...(endTimeZone ? { end_time_zone: endTimeZone } : {}),
   };
 }
 
@@ -401,14 +412,31 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
       }, 502);
     }
 
-    const events: Array<{ title: string; start: string; end: string; description: string }> = [];
+    const events: Array<{
+      title: string;
+      start: string;
+      end: string;
+      description: string;
+      start_time_zone?: string;
+      end_time_zone?: string;
+    }> = [];
     let page: { items?: Array<Parameters<typeof normalizeCalendarEvent>[0]>; nextPageToken?: string } | undefined = await response.json();
     const seenPageTokens = new Set<string>();
     while (page) {
       const beforeNormalizeCount = events.length;
       for (const event of page.items ?? []) {
-        const normalized = normalizeCalendarEvent(event);
-        if (normalized) events.push(normalized);
+        const normalized = normalizeCalendarEvent(event, connection.selectedCalendarTimeZone);
+        if (normalized) {
+          events.push(normalized);
+          console.info('[calendar-timezone-debug]', JSON.stringify({
+            calendarId: connection.selectedCalendarId,
+            calendarTimeZone: connection.selectedCalendarTimeZone ?? null,
+            rawStartDateTime: event.start?.dateTime ?? null,
+            rawStartTimeZone: event.start?.timeZone ?? null,
+            normalizedStart: normalized.start,
+            normalizedStartTimeZone: normalized.start_time_zone ?? null,
+          }));
+        }
       }
       console.info('[calendar-debug]', JSON.stringify({
         calendarId: connection.selectedCalendarId,

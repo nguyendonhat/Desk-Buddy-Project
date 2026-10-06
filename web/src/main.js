@@ -1,4 +1,10 @@
 import './style.css';
+import {
+  calendarEventDateKey,
+  calendarEventTimestamp,
+  formatCalendarDayHeading,
+  formatCalendarEventTime,
+} from './calendar-time.js';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787').replace(/\/$/, '');
 const params = new URLSearchParams(window.location.search);
@@ -28,23 +34,6 @@ if (oauthResult === 'denied') {
   messageElement.textContent = 'Không thể hoàn tất kết nối Google. Vui lòng thử lại.';
 }
 
-function eventDateKey(value) {
-  return value.slice(0, 10);
-}
-
-function formatDayHeading(dateKey) {
-  const date = new Date(`${dateKey}T12:00:00`);
-  const weekday = new Intl.DateTimeFormat('vi-VN', { weekday: 'long' }).format(date);
-  const [year, month, day] = dateKey.split('-');
-  return `${weekday}, ${day}/${month}/${year}`;
-}
-
-function formatEventTime(value) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'Cả ngày';
-  const match = value.match(/T(\d{2}):(\d{2})/);
-  return match ? `${match[1]}:${match[2]}` : value;
-}
-
 function showCalendarError(message) {
   calendarMessage.textContent = message;
   calendarMessage.classList.add('error');
@@ -62,10 +51,11 @@ function renderEvents(events) {
 
   calendarMessage.textContent = '';
   calendarMessage.classList.remove('error');
-  const orderedEvents = [...events].sort((left, right) => new Date(left.start) - new Date(right.start));
+  const orderedEvents = [...events].sort((left, right) =>
+    calendarEventTimestamp(left.start, left.start_time_zone) - calendarEventTimestamp(right.start, right.start_time_zone));
   const eventsByDay = new Map();
   for (const event of orderedEvents) {
-    const dateKey = eventDateKey(event.start);
+    const dateKey = calendarEventDateKey(event.start, event.start_time_zone);
     if (!eventsByDay.has(dateKey)) eventsByDay.set(dateKey, []);
     eventsByDay.get(dateKey).push(event);
   }
@@ -75,7 +65,7 @@ function renderEvents(events) {
     dayItem.className = 'event-day';
     const dayHeading = document.createElement('h3');
     dayHeading.className = 'day-heading';
-    dayHeading.textContent = formatDayHeading(dateKey);
+    dayHeading.textContent = formatCalendarDayHeading(dateKey);
     const dayList = document.createElement('ul');
     dayList.className = 'day-events';
 
@@ -86,7 +76,7 @@ function renderEvents(events) {
       time.className = 'event-time';
       time.textContent = /^\d{4}-\d{2}-\d{2}$/.test(event.start)
         ? 'Cả ngày'
-        : `${formatEventTime(event.start)} – ${formatEventTime(event.end)}`;
+        : `${formatCalendarEventTime(event.start, event.start_time_zone)} – ${formatCalendarEventTime(event.end, event.end_time_zone)}`;
       const title = document.createElement('h4');
       title.className = 'event-title';
       title.textContent = event.title || '(Không có tiêu đề)';

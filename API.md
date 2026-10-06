@@ -57,6 +57,10 @@ GET /api/calendar?device_id=DB001
 | start       | string | Thời gian bắt đầu  |
 | end         | string | Thời gian kết thúc |
 | description | string | Nội dung ghi chú   |
+| start_time_zone | string (tùy chọn) | Múi giờ IANA để hiển thị start, ví dụ `Asia/Ho_Chi_Minh` |
+| end_time_zone | string (tùy chọn) | Múi giờ IANA để hiển thị end |
+
+Worker có thể trả thêm `start_time_zone` và `end_time_zone` trên từng event để Web định dạng thời gian theo múi giờ của event/calendar. Hai field này là metadata tùy chọn; các field hiện có và cấu trúc `{ device_id, events }` được giữ nguyên. Event cả ngày tiếp tục dùng chuỗi date-only `YYYY-MM-DD`.
 
 ## Event không có description
 

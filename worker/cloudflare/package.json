@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test:timezone": "node --test test/calendar-timezone.test.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261006.1",

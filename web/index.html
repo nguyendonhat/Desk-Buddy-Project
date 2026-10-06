@@ -4,19 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f4f7f5" />
-    <title>Desk Buddy</title>
+    <title>Kết nối Desk Buddy</title>
   </head>
   <body>
     <main class="page">
       <section class="card" aria-labelledby="title">
-        <p class="eyebrow">DESK BUDDY · LOCAL WEB</p>
-        <h1 id="title">Web test page</h1>
-        <p class="intro">Skeleton cho Web Dashboard. Luồng Google OAuth và Google Calendar chưa được triển khai.</p>
-        <div class="status" role="status">
-          <span class="status-dot" aria-hidden="true"></span>
-          Web đang chạy local
-        </div>
-        <p class="hint">Bước tiếp theo: kết nối trang này với Cloudflare Worker trong các task OAuth và Calendar.</p>
+        <p class="eyebrow">DESK BUDDY</p>
+        <h1 id="title">Kết nối Google Calendar</h1>
+        <p class="intro">Cho phép Desk Buddy đọc lịch Google của bạn. Ứng dụng chỉ yêu cầu quyền đọc lịch.</p>
+        <div id="connection-status" class="status" role="status" aria-live="polite">Đang kiểm tra trạng thái…</div>
+        <a id="connect-button" class="button" href="#">Đăng nhập bằng Google</a>
+        <p id="message" class="hint"></p>
+        <p class="device">Thiết bị: <strong id="device-id"></strong></p>
       </section>
     </main>
     <script type="module" src="/src/main.js"></script>

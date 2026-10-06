@@ -1,4 +1,5 @@
-# Copy to .dev.vars for local-only Worker secrets when future tasks require them.
-# Do not commit .dev.vars or put real credentials in this example file.
-# GOOGLE_CLIENT_ID=
-# GOOGLE_CLIENT_SECRET=
+# Copy to .dev.vars and set values from your Google Cloud OAuth client.
+# This file is an example only. Never commit .dev.vars or real credentials.
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=replace-with-google-oauth-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:8787/api/oauth/google/callback

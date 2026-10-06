@@ -4,3 +4,4 @@ compatibility_date = "2026-10-06"
 
 [vars]
 APP_ENV = "local"
+WEB_ORIGIN = "http://localhost:5173"

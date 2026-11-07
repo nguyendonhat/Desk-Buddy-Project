@@ -6,3 +6,4 @@ dist/
 .env.*
 !.env.example
 !.dev.vars.example
+/firmware/ESP32/src/config.h

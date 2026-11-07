@@ -29,3 +29,7 @@ The Worker currently keeps OAuth connection state in memory for local developmen
 - Calendar refresh runs every five minutes; the e-paper redraws only after a successful fetch.
 - Calendar reminder time conversion assumes Vietnam UTC+7. Change `LOCAL_UTC_OFFSET_SECONDS` and the POSIX TZ string if using a different local zone.
 - This increment does not yet implement Pomodoro controls, web device commands, event caching, or enclosure wiring validation.
+
+## Test without hardware
+
+From this folder, run `pio test -e native` to test RFC3339 event-time conversion and reminder-window logic on the computer. This does not need an ESP32 or connected peripherals. To compile the full firmware without uploading it, run `pio run -e nodemcu-32s` after creating `src/config.h` from the example. The native test does not validate display drivers, GPIO wiring, TLS connectivity, or real RTC behavior.

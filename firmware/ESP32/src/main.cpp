@@ -11,6 +11,7 @@
 #include <Wire.h>
 
 #include "config.h"
+#include "calendar_logic.h"
 
 // WeAct Studio 2.9-inch monochrome panel, common SSD1680/GDEY029T94 variant.
 // Check the panel revision on the rear label if the display does not initialize.
@@ -128,42 +129,16 @@ void drawCalendar() {
   epaper.hibernate();
 }
 
-bool parseEventLocalEpoch(const String& value, long& localEpoch) {
-  if (value.length() < 16 || value[10] != 'T') return false; // All-day events have no time.
-
-  const int year = value.substring(0, 4).toInt();
-  const int month = value.substring(5, 7).toInt();
-  const int day = value.substring(8, 10).toInt();
-  const int hour = value.substring(11, 13).toInt();
-  const int minute = value.substring(14, 16).toInt();
-  const int second = value.length() >= 19 ? value.substring(17, 19).toInt() : 0;
-  DateTime wallTime(year, month, day, hour, minute, second);
-
-  long eventOffset = value.endsWith("Z") ? 0 : LOCAL_UTC_OFFSET_SECONDS;
-  const int zoneStart = value.lastIndexOf('+') > 10 ? value.lastIndexOf('+') : value.lastIndexOf('-');
-  if (zoneStart > 10 && value.length() >= static_cast<size_t>(zoneStart + 6)) {
-    const int sign = value[zoneStart] == '-' ? -1 : 1;
-    const int offsetHours = value.substring(zoneStart + 1, zoneStart + 3).toInt();
-    const int offsetMinutes = value.substring(zoneStart + 4, zoneStart + 6).toInt();
-    eventOffset = sign * (offsetHours * 3600L + offsetMinutes * 60L);
-  }
-
-  // Convert the event's RFC3339 wall time to the device's configured local offset.
-  localEpoch = static_cast<long>(wallTime.unixtime()) - eventOffset + LOCAL_UTC_OFFSET_SECONDS;
-  return true;
-}
-
 void checkReminder() {
   if (!rtcReady || !calendarLoaded || eventCount == 0) return;
-  const long now = static_cast<long>(rtc.now().unixtime());
+  const int64_t now = static_cast<int64_t>(rtc.now().unixtime());
   reminderActive = false;
   for (size_t i = 0; i < eventCount; i++) {
-    long start = 0;
-    if (!parseEventLocalEpoch(events[i].start, start)) continue;
-    const long secondsUntil = start - now;
-    if (secondsUntil >= 0 && secondsUntil <= REMINDER_WINDOW_SECONDS) {
+    int64_t start = 0;
+    if (!deskbuddy::parseEventLocalEpoch(std::string(events[i].start.c_str()), LOCAL_UTC_OFFSET_SECONDS, start)) continue;
+    if (deskbuddy::isWithinReminderWindow(start, now, REMINDER_WINDOW_SECONDS)) {
       reminderActive = true;
-      if (events[i].start != lastReminderKey) {
+      if (deskbuddy::shouldBeepForEvent(std::string(events[i].start.c_str()), std::string(lastReminderKey.c_str()))) {
         lastReminderKey = events[i].start;
         setStatusLed(true, false, false);
         digitalWrite(BUZZER_PIN, HIGH);

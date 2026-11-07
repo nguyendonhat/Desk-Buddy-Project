@@ -4,18 +4,20 @@
 
 Desk Buddy gồm 4 thành phần phần mềm/hệ thống chính:
 
-1. ESP32-S3
+1. NodeMCU-32S (ESP32-WROOM-32)
 2. Cloudflare Worker
 3. Web Dashboard
 4. Google Calendar
 
 Phần cứng local gồm:
 
-* TFT 1
-* TFT 2
+* WeAct Studio 2.9 inch monochrome e-paper (SPI)
+* LCD1602 with I²C interface
 * DS3231
+* DS3231 backup coin cell (RTC only)
 * RGB LED
 * Buzzer
+* Three buttons
 
 ## 2. Kiến trúc tổng thể
 
@@ -32,17 +34,18 @@ Google Calendar
   ↓
 Normalized JSON
   ↓
-ESP32-S3
-  ├── TFT 1
-  ├── TFT 2
+NodeMCU-32S (ESP32-WROOM-32)
+  ├── WeAct 2.9 inch e-paper
+  ├── LCD1602 I²C
   ├── RGB LED
   ├── Buzzer
+  ├── Buttons
   └── DS3231
 ```
 
 ## 3. Trách nhiệm từng module
 
-### ESP32-S3
+### NodeMCU-32S (ESP32-WROOM-32)
 
 * Kết nối Wi-Fi.
 * Reconnect Wi-Fi.
@@ -98,7 +101,7 @@ Desk Buddy JSON
  ↓
 ESP32
  ↓
-TFT
+E-paper / LCD1602
 ```
 
 ## 5. Offline flow
@@ -112,7 +115,7 @@ DS3231 → Clock
  ↓
 Local Timer → Pomodoro
  ↓
-TFT / RGB LED / Buzzer
+E-paper / LCD1602 / RGB LED / Buzzer
 ```
 
 ## 6. Quy tắc kiến trúc

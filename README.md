@@ -21,6 +21,14 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=http://localhost:8787/api/oauth/google/callback
 ```
 
+Để ESP32 đọc Calendar, thêm token riêng cho `DB001` vào cùng file `.dev.vars`:
+
+```dotenv
+DEVICE_API_TOKENS={"DB001":"replace-with-a-long-random-device-token"}
+```
+
+Thiết bị gửi token trong header `Authorization: Bearer ...` khi gọi `/api/calendar?device_id=DB001`. Không commit token hoặc đặt token trong mã Web. Khi triển khai thật, hãy cấu hình giá trị này bằng Cloudflare secret; token nhúng trong firmware prototype có thể bị trích xuất.
+
 Không đưa Client Secret vào Web, QR hoặc Git. OAuth consent screen cần được cấu hình và thêm tài khoản thử nghiệm nếu ứng dụng còn ở chế độ Testing. Worker yêu cầu scope `openid`, `email` và `https://www.googleapis.com/auth/calendar.readonly`.
 
 ### 2. Chạy Cloudflare Worker
@@ -55,13 +63,13 @@ Mở `http://localhost:5173`. Trang Connect mặc định dùng `device_id=DB001
 4. Web truy vấn connection status bằng session cookie HttpOnly. Khi thành công sẽ hiển thị “Google Calendar đã được kết nối”.
 5. Để kiểm tra từ chối, bắt đầu lại và chọn Cancel/deny. Web sẽ báo rằng quyền chưa được cấp và không hiển thị trạng thái Connected.
 
-Worker dùng OAuth state ngẫu nhiên, hết hạn sau 10 phút và chỉ dùng một lần, cùng PKCE. Callback lỗi/từ chối không trả token cho Web. OAuth token được giữ trong memory server-side cho task Calendar sau này; không có endpoint đọc token. Calendar API chưa được triển khai.
+Worker dùng OAuth state ngẫu nhiên, hết hạn sau 10 phút và chỉ dùng một lần, cùng PKCE. Callback lỗi/từ chối không trả token cho Web. Worker giữ OAuth token trong memory server-side; Calendar API lấy sự kiện và chuẩn hóa dữ liệu cho Web hoặc ESP32 đã xác thực. Lưu trữ OAuth/token hiện chỉ phù hợp chạy local, chưa bền qua lần Worker restart/evict.
 
 ### Giới hạn development và device linking
 
 Worker hiện lưu authorization tạm thời, session, connection và token trong memory của isolate. Dữ liệu có thể mất khi Worker restart/evict và không chia sẻ đáng tin cậy giữa nhiều isolate; đây chỉ là giải pháp local development. Trước deploy hoặc dùng nhiều thiết bị, cần bổ sung storage bền/được bảo vệ cho mapping device-account, session và refresh token, ví dụ Cloudflare D1 với mã hóa token thích hợp hoặc dịch vụ lưu secret chuyên dụng.
 
-Hiện chưa có firmware/pairing credential. `device_id` chỉ chọn thiết bị, không phải secret; biết `DB001` không cho phép đọc status vì status cần browser session và chưa có Calendar endpoint. Tuy nhiên, người biết ID vẫn có thể tự khởi tạo OAuth và cố liên kết tài khoản của họ với ID đó. Trước sử dụng thực tế, thiết bị cần cấp pairing nonce ngẫu nhiên, ngắn hạn, dùng một lần qua kênh được xác thực; không thể bảo đảm quyền sở hữu thiết bị chỉ bằng QR có device ID.
+Firmware và quy trình pairing thiết bị chưa được triển khai. `device_id` chỉ chọn thiết bị, không phải secret. Calendar endpoint chấp nhận browser session hoặc token riêng khớp với device ID. Trước khi dùng thực tế, cần có quy trình cấp/thu hồi token an toàn và lưu OAuth/session bền vững; token nhúng trong firmware prototype có thể bị trích xuất.
 
 ### TypeScript check
 

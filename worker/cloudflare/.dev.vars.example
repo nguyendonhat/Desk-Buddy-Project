@@ -3,3 +3,4 @@
 GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=replace-with-google-oauth-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8787/api/oauth/google/callback
+DEVICE_API_TOKENS={"DB001":"replace-with-a-long-random-device-token"}

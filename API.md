@@ -23,6 +23,14 @@ Nếu cần thay đổi API, phải thống nhất với toàn nhóm trước.
 GET /api/calendar?device_id=DB001
 ```
 
+Browser requests may use the existing HttpOnly session cookie. ESP32 requests must send the token configured for that device in the Worker secret `DEVICE_API_TOKENS`:
+
+```http
+Authorization: Bearer <device-token>
+```
+
+For local development, set `DEVICE_API_TOKENS` in `worker/cloudflare/.dev.vars` to a JSON object keyed by device ID, for example `{"DB001":"<long-random-token>"}`. Never commit the real token or expose it in the Web Dashboard. A device token authorizes reading the selected calendar for its matching device ID.
+
 ## Request
 
 Ví dụ:
@@ -212,7 +220,7 @@ Prototype:
 DB001
 ```
 
-Mọi request liên quan đến thiết bị phải sử dụng device_id đúng contract.
+Mọi request liên quan đến thiết bị phải sử dụng device_id đúng contract. Device ID không phải thông tin xác thực; Calendar API yêu cầu browser session hoặc bearer token riêng của thiết bị.
 
 ---
 

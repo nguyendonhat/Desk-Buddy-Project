@@ -2,14 +2,15 @@
 
 ## 1. Giới thiệu
 
-Desk Buddy là thiết bị trợ lý cá nhân trên bàn học, sử dụng ESP32-S3 làm bộ điều khiển trung tâm.
+Desk Buddy là thiết bị trợ lý cá nhân trên bàn học, sử dụng NodeMCU-32S (ESP32-WROOM-32) làm bộ điều khiển trung tâm.
 
 Thiết bị có khả năng hiển thị thời gian, lịch học/lịch cá nhân từ Google Calendar, reminder và Pomodoro.
 
 Kiến trúc của hệ thống gồm:
 
-* ESP32-S3
-* 2 màn hình TFT
+* NodeMCU-32S (ESP32-WROOM-32)
+* Màn hình e-paper WeAct Studio 2.9 inch, đen trắng, giao tiếp SPI
+* Màn hình LCD1602 giao tiếp I²C
 * DS3231 RTC
 * RGB LED
 * Piezo buzzer
@@ -27,9 +28,9 @@ Thiết bị phải tiếp tục thực hiện các chức năng local cơ bản
 
 ### 3.1. Thời gian
 
-* Hiển thị giờ.
-* Hiển thị ngày.
-* Sử dụng DS3231 để duy trì thời gian local.
+* LCD1602 hiển thị giờ và trạng thái Pomodoro.
+* E-paper hiển thị lịch trong ngày và sự kiện sắp tới.
+* Sử dụng DS3231 để duy trì thời gian local khi mất nguồn USB; pin RTC không cấp nguồn cho ESP32 hoặc màn hình.
 
 ### 3.2. Google Calendar
 
@@ -69,19 +70,25 @@ Khi mất Wi-Fi:
 
 Người dùng → Web Dashboard → Google OAuth → Cloudflare Worker → Google Calendar.
 
-Cloudflare Worker chuyển dữ liệu thành JSON chuẩn của Desk Buddy và cung cấp cho ESP32-S3.
+Cloudflare Worker chuyển dữ liệu thành JSON chuẩn của Desk Buddy và cung cấp cho NodeMCU-32S.
 
-ESP32-S3 điều khiển TFT, RGB LED, buzzer và các chức năng local.
+NodeMCU-32S điều khiển hai màn hình, RTC, RGB LED, buzzer và các chức năng local.
 
 ## 5. Phần cứng
 
-* ESP32-S3-WROOM-1
-* 2 × TFT ILI9341
+* NodeMCU-32S (ESP32-WROOM-32)
+* 1 × WeAct Studio 2.9 inch e-paper đen trắng (SPI)
+* 1 × LCD1602 I²C
 * DS3231 RTC
+* Pin cúc áo dự phòng cho DS3231 (không cấp nguồn cho toàn thiết bị)
 * RGB LED
 * Piezo buzzer
-* USB-C 5V
+* 3 nút nhấn
+* Bộ chuyển mức I²C 3.3 V ↔ 5 V cho LCD1602 nếu backpack kéo SDA/SCL lên 5 V
+* Nguồn USB 5 V qua cổng của NodeMCU-32S
 * Dây/kết nối cần thiết
+
+Arduino Nano boards hiện có không cần dùng trong cấu hình prototype này; một NodeMCU-32S điều khiển các module.
 
 ## 6. Ngoài phạm vi MVP
 
@@ -89,7 +96,7 @@ ESP32-S3 điều khiển TFT, RGB LED, buzzer và các chức năng local.
 * Camera
 * Mobile application riêng
 * Wireless charging
-* Battery
+* Pin sạc cấp nguồn cho toàn thiết bị
 * ESP32 gọi trực tiếp Google Calendar
 * AI chatbot
 * Database phức tạp nếu chưa cần

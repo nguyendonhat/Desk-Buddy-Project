@@ -4,6 +4,7 @@ interface Env {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
+  DEVICE_API_TOKENS: string;
 }
 
 interface PendingAuthorization {
@@ -379,7 +380,8 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
   const deviceId = url.searchParams.get('device_id');
   if (!validDeviceId(deviceId)) return jsonResponse(request, env, { success: false, error: 'Invalid device_id' }, 400);
 
-  const connection = connectionForSession(request, deviceId);
+  const connection = connectionForSession(request, deviceId)
+    ?? (deviceTokenMatches(request, env, deviceId) ? connections.get(deviceId) : undefined);
   if (!connection) {
     return jsonResponse(request, env, { success: false, error: 'Google account is not connected. Please connect it again.' }, 401);
   }
@@ -471,6 +473,28 @@ function connectionForSession(request: Request, deviceId: string): Connection | 
   if (!session || session.deviceId !== deviceId) return undefined;
   const connection = connections.get(deviceId);
   return connection?.connectionId === session.connectionId ? connection : undefined;
+}
+
+function deviceTokenMatches(request: Request, env: Env, deviceId: string): boolean {
+  const authorization = request.headers.get('authorization');
+  if (!authorization?.startsWith('Bearer ')) return false;
+
+  let tokens: Record<string, string>;
+  try {
+    tokens = JSON.parse(env.DEVICE_API_TOKENS || '{}') as Record<string, string>;
+  } catch {
+    return false;
+  }
+
+  const expected = tokens[deviceId];
+  const provided = authorization.slice('Bearer '.length);
+  if (typeof expected !== 'string' || !expected || provided.length !== expected.length) return false;
+
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    difference |= expected.charCodeAt(index) ^ provided.charCodeAt(index);
+  }
+  return difference === 0;
 }
 
 function handleOAuthLogout(request: Request, env: Env): Response {

@@ -1,7 +1,11 @@
-name = "desk-buddy-worker"
+name = "desk-buddy-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-06"
 
 [vars]
-APP_ENV = "local"
-WEB_ORIGIN = "http://localhost:5173"
+APP_ENV = "production"
+WEB_ORIGIN = "https://desk-buddy-web-c1c.pages.dev"
+
+[[kv_namespaces]]
+binding = "DESK_BUDDY_STORE"
+id = "13dfeaa3c0e74926b2f88edf76714c3c"

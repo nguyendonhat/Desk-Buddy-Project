@@ -5,6 +5,7 @@ interface Env {
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
   DEVICE_API_TOKENS: string;
+  DESK_BUDDY_STORE: KVNamespace;
 }
 
 interface PendingAuthorization {
@@ -38,14 +39,12 @@ interface BrowserSession {
   createdAt: number;
 }
 
-// Development-only storage. Cloudflare may evict/restart isolates at any time.
-const pendingAuthorizations = new Map<string, PendingAuthorization>();
-const connections = new Map<string, Connection>();
-const browserSessions = new Map<string, BrowserSession>();
-
 const STATE_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = 'desk_buddy_session';
+const STATE_KEY_PREFIX = 'oauth-state:';
+const SESSION_KEY_PREFIX = 'oauth-session:';
+const CONNECTION_KEY_PREFIX = 'connection:';
 const CALENDAR_PAGE_SIZE = 250;
 const CALENDAR_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const jsonHeaders = { 'content-type': 'application/json; charset=utf-8' };
@@ -94,9 +93,10 @@ function jsonResponse(request: Request, env: Env, body: unknown, status = 200): 
   return Response.json(body, { status, headers });
 }
 
-function frontendRedirect(env: Env, result: 'connected' | 'denied' | 'error'): Response {
+function frontendRedirect(env: Env, result: 'connected' | 'denied' | 'error', deviceId?: string): Response {
   const destination = new URL('/', env.WEB_ORIGIN);
   destination.searchParams.set('oauth', result);
+  if (deviceId && validDeviceId(deviceId)) destination.searchParams.set('device_id', deviceId);
   return new Response(null, { status: 303, headers: { location: destination.toString(), 'cache-control': 'no-store' } });
 }
 
@@ -104,28 +104,29 @@ function validDeviceId(deviceId: string | null): deviceId is string {
   return deviceId !== null && /^[A-Za-z0-9_-]{1,64}$/.test(deviceId);
 }
 
-function pruneExpiredEntries(): void {
-  const now = Date.now();
-  for (const [state, item] of pendingAuthorizations) {
-    if (now - item.createdAt > STATE_TTL_MS) pendingAuthorizations.delete(state);
-  }
-  for (const [sessionId, session] of browserSessions) {
-    if (now - session.createdAt > SESSION_TTL_MS) browserSessions.delete(sessionId);
-  }
+async function getStored<T>(env: Env, key: string): Promise<T | undefined> {
+  return (await env.DESK_BUDDY_STORE.get<T>(key, 'json')) ?? undefined;
+}
+
+function putStored(env: Env, key: string, value: unknown, expirationTtl?: number): Promise<void> {
+  return env.DESK_BUDDY_STORE.put(key, JSON.stringify(value), expirationTtl ? { expirationTtl } : undefined);
+}
+
+function deleteStored(env: Env, key: string): Promise<void> {
+  return env.DESK_BUDDY_STORE.delete(key);
 }
 
 async function handleOAuthStart(request: Request, env: Env, url: URL): Promise<Response> {
   const deviceId = url.searchParams.get('device_id');
   if (!validDeviceId(deviceId)) return jsonResponse(request, env, { success: false, error: 'Invalid device_id' }, 400);
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI || !env.WEB_ORIGIN) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI || !env.WEB_ORIGIN || !env.DESK_BUDDY_STORE) {
     return jsonResponse(request, env, { success: false, error: 'OAuth is not configured' }, 503);
   }
 
-  pruneExpiredEntries();
   const state = randomToken();
   const codeVerifier = randomToken(48);
   const challenge = base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier))));
-  pendingAuthorizations.set(state, { deviceId, codeVerifier, createdAt: Date.now() });
+  await putStored(env, `${STATE_KEY_PREFIX}${state}`, { deviceId, codeVerifier, createdAt: Date.now() } satisfies PendingAuthorization, STATE_TTL_MS / 1000);
 
   const authorizeUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authorizeUrl.search = new URLSearchParams({
@@ -137,24 +138,23 @@ async function handleOAuthStart(request: Request, env: Env, url: URL): Promise<R
     code_challenge: challenge,
     code_challenge_method: 'S256',
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'select_account consent',
   }).toString();
   return Response.redirect(authorizeUrl.toString(), 302);
 }
 
 async function handleOAuthCallback(request: Request, env: Env, url: URL): Promise<Response> {
-  pruneExpiredEntries();
   const state = url.searchParams.get('state');
-  const pending = state ? pendingAuthorizations.get(state) : undefined;
-  if (state) pendingAuthorizations.delete(state); // OAuth state is one-time, even on error.
+  const pending = state ? await getStored<PendingAuthorization>(env, `${STATE_KEY_PREFIX}${state}`) : undefined;
+  if (state) await deleteStored(env, `${STATE_KEY_PREFIX}${state}`); // OAuth state is one-time, even on error.
   if (!pending || Date.now() - pending.createdAt > STATE_TTL_MS) return frontendRedirect(env, 'error');
 
   if (url.searchParams.has('error')) {
-    return frontendRedirect(env, url.searchParams.get('error') === 'access_denied' ? 'denied' : 'error');
+    return frontendRedirect(env, url.searchParams.get('error') === 'access_denied' ? 'denied' : 'error', pending.deviceId);
   }
 
   const code = url.searchParams.get('code');
-  if (!code) return frontendRedirect(env, 'error');
+  if (!code) return frontendRedirect(env, 'error', pending.deviceId);
 
   try {
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -169,55 +169,52 @@ async function handleOAuthCallback(request: Request, env: Env, url: URL): Promis
         code_verifier: pending.codeVerifier,
       }),
     });
-    if (!tokenResponse.ok) return frontendRedirect(env, 'error');
+    if (!tokenResponse.ok) return frontendRedirect(env, 'error', pending.deviceId);
     const tokens = await tokenResponse.json<GoogleTokens>();
 
     const profileResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
       headers: { authorization: `Bearer ${tokens.access_token}` },
     });
-    if (!profileResponse.ok) return frontendRedirect(env, 'error');
+    if (!profileResponse.ok) return frontendRedirect(env, 'error', pending.deviceId);
     const profile = await profileResponse.json<{ email?: string; email_verified?: boolean }>();
-    if (!profile.email || profile.email_verified !== true) return frontendRedirect(env, 'error');
+    if (!profile.email || profile.email_verified !== true) return frontendRedirect(env, 'error', pending.deviceId);
 
     const sessionId = randomToken();
-    for (const [existingSessionId, session] of browserSessions) {
-      if (session.deviceId === pending.deviceId) browserSessions.delete(existingSessionId);
-    }
-    connections.set(pending.deviceId, {
+    const connection: Connection = {
       deviceId: pending.deviceId,
       connectionId: sessionId,
       email: profile.email,
       tokens,
       accessTokenExpiresAt: Date.now() + Math.max(0, (tokens.expires_in ?? 3600) - 60) * 1000,
       connectedAt: Date.now(),
-    });
-    browserSessions.set(sessionId, { deviceId: pending.deviceId, connectionId: sessionId, createdAt: Date.now() });
+    };
+    await putStored(env, `${CONNECTION_KEY_PREFIX}${pending.deviceId}`, connection);
+    await putStored(env, `${SESSION_KEY_PREFIX}${sessionId}`, { deviceId: pending.deviceId, connectionId: sessionId, createdAt: Date.now() } satisfies BrowserSession, SESSION_TTL_MS / 1000);
 
-    const response = frontendRedirect(env, 'connected');
+    const response = frontendRedirect(env, 'connected', pending.deviceId);
     const secure = new URL(env.WEB_ORIGIN).protocol === 'https:';
     response.headers.append(
       'set-cookie',
-      `${COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}${secure ? '; Secure' : ''}`,
+      `${COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; SameSite=${secure ? 'None' : 'Lax'}; Max-Age=${SESSION_TTL_MS / 1000}${secure ? '; Secure' : ''}`,
     );
     return response;
   } catch {
     // Never include provider response bodies or token values in logs or redirects.
-    return frontendRedirect(env, 'error');
+    return frontendRedirect(env, 'error', pending.deviceId);
   }
 }
 
-function handleConnectionStatus(request: Request, env: Env, url: URL): Response {
-  pruneExpiredEntries();
+async function handleConnectionStatus(request: Request, env: Env, url: URL): Promise<Response> {
   const deviceId = url.searchParams.get('device_id');
   if (!validDeviceId(deviceId)) return jsonResponse(request, env, { success: false, error: 'Invalid device_id' }, 400);
 
   const sessionId = cookieValue(request, COOKIE_NAME);
-  const session = sessionId ? browserSessions.get(sessionId) : undefined;
+  const session = sessionId ? await getStored<BrowserSession>(env, `${SESSION_KEY_PREFIX}${sessionId}`) : undefined;
   if (!session || session.deviceId !== deviceId) {
     return jsonResponse(request, env, { connected: false });
   }
 
-  const connection = connectionForSession(request, deviceId);
+  const connection = await connectionForSession(request, env, deviceId);
   return jsonResponse(request, env, {
     connected: Boolean(connection),
     ...(connection ? { email: connection.email } : {}),
@@ -226,7 +223,7 @@ function handleConnectionStatus(request: Request, env: Env, url: URL): Response 
 
 async function refreshGoogleAccessToken(connection: Connection, env: Env): Promise<string> {
   if (!connection.tokens.refresh_token) {
-    connections.delete(connection.deviceId);
+    await deleteStored(env, `${CONNECTION_KEY_PREFIX}${connection.deviceId}`);
     throw new CalendarError('Google permission has expired or was revoked. Please reconnect your Google account.', 401);
   }
 
@@ -254,7 +251,7 @@ async function refreshGoogleAccessToken(connection: Connection, env: Env): Promi
       // Do not expose provider response bodies to the caller.
     }
     if (response.status === 400 && providerError === 'invalid_grant') {
-      connections.delete(connection.deviceId);
+      await deleteStored(env, `${CONNECTION_KEY_PREFIX}${connection.deviceId}`);
       throw new CalendarError('Google permission has expired or was revoked. Please reconnect your Google account.', 401);
     }
     throw new CalendarError('Google could not refresh authorization. Please try again.', 502);
@@ -263,6 +260,7 @@ async function refreshGoogleAccessToken(connection: Connection, env: Env): Promi
   const refreshed = await response.json<GoogleTokens>();
   connection.tokens = { ...connection.tokens, ...refreshed, refresh_token: connection.tokens.refresh_token };
   connection.accessTokenExpiresAt = Date.now() + Math.max(0, (refreshed.expires_in ?? 3600) - 60) * 1000;
+  await putStored(env, `${CONNECTION_KEY_PREFIX}${connection.deviceId}`, connection);
   return connection.tokens.access_token;
 }
 
@@ -290,7 +288,7 @@ async function authorizedGoogleFetch(connection: Connection, env: Env, apiUrl: U
     }
   }
   if (response.status === 401) {
-    connections.delete(connection.deviceId);
+    await deleteStored(env, `${CONNECTION_KEY_PREFIX}${connection.deviceId}`);
     throw new CalendarError('Google permission has expired or was revoked. Please reconnect your Google account.', 401);
   }
   return response;
@@ -376,12 +374,11 @@ export function normalizeCalendarEvent(event: {
 }
 
 async function handleCalendar(request: Request, env: Env, url: URL): Promise<Response> {
-  pruneExpiredEntries();
   const deviceId = url.searchParams.get('device_id');
   if (!validDeviceId(deviceId)) return jsonResponse(request, env, { success: false, error: 'Invalid device_id' }, 400);
 
-  const connection = connectionForSession(request, deviceId)
-    ?? (deviceTokenMatches(request, env, deviceId) ? connections.get(deviceId) : undefined);
+  const connection = await connectionForSession(request, env, deviceId)
+    ?? (deviceTokenMatches(request, env, deviceId) ? await getStored<Connection>(env, `${CONNECTION_KEY_PREFIX}${deviceId}`) : undefined);
   if (!connection) {
     return jsonResponse(request, env, { success: false, error: 'Google account is not connected. Please connect it again.' }, 401);
   }
@@ -467,11 +464,11 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
   }
 }
 
-function connectionForSession(request: Request, deviceId: string): Connection | undefined {
+async function connectionForSession(request: Request, env: Env, deviceId: string): Promise<Connection | undefined> {
   const sessionId = cookieValue(request, COOKIE_NAME);
-  const session = sessionId ? browserSessions.get(sessionId) : undefined;
+  const session = sessionId ? await getStored<BrowserSession>(env, `${SESSION_KEY_PREFIX}${sessionId}`) : undefined;
   if (!session || session.deviceId !== deviceId) return undefined;
-  const connection = connections.get(deviceId);
+  const connection = await getStored<Connection>(env, `${CONNECTION_KEY_PREFIX}${deviceId}`);
   return connection?.connectionId === session.connectionId ? connection : undefined;
 }
 
@@ -497,18 +494,15 @@ function deviceTokenMatches(request: Request, env: Env, deviceId: string): boole
   return difference === 0;
 }
 
-function handleOAuthLogout(request: Request, env: Env): Response {
+async function handleOAuthLogout(request: Request, env: Env): Promise<Response> {
   const sessionId = cookieValue(request, COOKIE_NAME);
-  const session = sessionId ? browserSessions.get(sessionId) : undefined;
-  if (sessionId) browserSessions.delete(sessionId);
+  const session = sessionId ? await getStored<BrowserSession>(env, `${SESSION_KEY_PREFIX}${sessionId}`) : undefined;
+  if (sessionId) await deleteStored(env, `${SESSION_KEY_PREFIX}${sessionId}`);
 
   if (session) {
-    const connection = connections.get(session.deviceId);
+    const connection = await getStored<Connection>(env, `${CONNECTION_KEY_PREFIX}${session.deviceId}`);
     if (connection?.connectionId === session.connectionId) {
-      connections.delete(session.deviceId);
-      for (const [otherSessionId, otherSession] of browserSessions) {
-        if (otherSession.connectionId === session.connectionId) browserSessions.delete(otherSessionId);
-      }
+      await deleteStored(env, `${CONNECTION_KEY_PREFIX}${session.deviceId}`);
     }
   }
 
@@ -518,16 +512,15 @@ function handleOAuthLogout(request: Request, env: Env): Response {
   headers.set('cache-control', 'no-store');
   headers.append(
     'set-cookie',
-    `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? '; Secure' : ''}`,
+    `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=${secure ? 'None' : 'Lax'}; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? '; Secure' : ''}`,
   );
   return Response.json({ success: true }, { status: 200, headers });
 }
 
 async function handleCalendarList(request: Request, env: Env, url: URL): Promise<Response> {
-  pruneExpiredEntries();
   const deviceId = url.searchParams.get('device_id');
   if (!validDeviceId(deviceId)) return jsonResponse(request, env, { success: false, error: 'Invalid device_id' }, 400);
-  const connection = connectionForSession(request, deviceId);
+  const connection = await connectionForSession(request, env, deviceId);
   if (!connection) return jsonResponse(request, env, { success: false, error: 'Google account is not connected in this browser session.' }, 401);
 
   try {
@@ -551,7 +544,7 @@ async function handleCalendarSelection(request: Request, env: Env): Promise<Resp
   const calendarId = typeof body.calendar_id === 'string' ? body.calendar_id : '';
   if (!validDeviceId(deviceId)) return jsonResponse(request, env, { success: false, error: 'Invalid device_id' }, 400);
   if (!calendarId || calendarId.length > 512) return jsonResponse(request, env, { success: false, error: 'Invalid calendar_id' }, 400);
-  const connection = connectionForSession(request, deviceId);
+  const connection = await connectionForSession(request, env, deviceId);
   if (!connection) return jsonResponse(request, env, { success: false, error: 'Google account is not connected in this browser session.' }, 401);
 
   try {
@@ -562,6 +555,7 @@ async function handleCalendarSelection(request: Request, env: Env): Promise<Resp
     }
     connection.selectedCalendarId = calendarId;
     connection.selectedCalendarTimeZone = selectedCalendar.timeZone;
+    await putStored(env, `${CONNECTION_KEY_PREFIX}${deviceId}`, connection);
     return jsonResponse(request, env, { success: true });
   } catch (error) {
     if (error instanceof CalendarError) return jsonResponse(request, env, { success: false, error: error.message }, error.status);
@@ -575,7 +569,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request, env) });
 
     if (request.method === 'GET' && url.pathname === '/api/health') {
-      return jsonResponse(request, env, { success: true, service: 'desk-buddy-worker', environment: env.APP_ENV });
+      return jsonResponse(request, env, { success: true, service: 'desk-buddy-api', environment: env.APP_ENV });
     }
     if (request.method === 'GET' && url.pathname === '/api/oauth/google/start') {
       return handleOAuthStart(request, env, url);

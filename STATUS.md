@@ -24,14 +24,15 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 - `npm run check` in `worker/cloudflare`: passed.
 - Timezone tests: 5 web + 4 Worker cases passed.
 - Worker Wrangler dry-run: passed; bundle includes the production KV binding and Pages origin. Live Worker still reports the old `desk-buddy-worker`/`local` health response, confirming the updated source is not deployed.
-- Cloudflare Preview build exposed that Wrangler requires an explicit `previews` configuration block. Preview now has its own KV namespace, and the Preview build command explicitly points to the Worker config; a new Preview build is pending.
+- Cloudflare Preview build for commit `5fb1919` completed successfully (version `21736982`). `https://issue-1-oauth-kv-desk-buddy-api.deskbuddy67.workers.dev/api/health` returns `{"success":true,"service":"desk-buddy-api","environment":"preview"}`. Preview uses its own KV namespace and does not inherit Production OAuth secrets, so a full Google login has not been tested there.
+- The live Production health route still returns `{"success":true,"service":"desk-buddy-worker","environment":"local"}`. The updated OAuth/KV source remains only on the open PR branch and is not deployed to Production.
 - `pio test -e native`: not run successfully; machine lacks `gcc/g++`.
 - Physical ESP32/e-paper upload and display: not verified. Last port check only showed COM3/COM4 Bluetooth, no ESP32 serial device.
 - QR scan on physical panel: not verified.
 
 ## Highest-priority next steps
 
-1. Deploy the updated Worker source and verify OAuth returns to the Pages app with `connected: true`; then verify calendar listing and event fetch.
+1. Review and merge the OAuth/KV pull request, then deploy the updated Worker and verify OAuth returns to the Pages app with `connected: true`; verify calendar listing and event fetch. Production deployment and live OAuth are not yet verified.
 2. Connect the ESP32 and confirm a USB serial COM port appears; inspect boot Serial output.
 3. Verify the exact e-paper model label and compare it to the selected GxEPD2 driver.
 4. Test e-paper alone with a minimal Hello screen before diagnosing integrated UI; then add LCD/RTC/buttons.

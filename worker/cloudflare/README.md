@@ -24,6 +24,8 @@ Production Worker: `desk-buddy-api`. Production web origin: `https://desk-buddy-
 
 Cloudflare Workers Builds uses `/worker/cloudflare` for Production. Preview builds run from the repository root with `npx wrangler preview --config worker/cloudflare/wrangler.toml`, so they load this Worker configuration even in the monorepo.
 
+Previews use separate KV storage and do not inherit production secrets. They can verify the Worker build and health route; full Google OAuth must be verified on Production after the reviewed change is deployed.
+
 OAuth state keys expire after 10 minutes; browser session keys expire after 7 days. Connection records persist until the user logs out, revokes access, or the refresh token becomes invalid. Logout deletes the device's active connection and its Google tokens from KV.
 
 Never expose KV contents or OAuth token values in logs or the Web Dashboard.

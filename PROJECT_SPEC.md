@@ -14,7 +14,7 @@ Kiến trúc của hệ thống gồm:
 * DS3231 RTC
 * RGB LED
 * Piezo buzzer
-* Web Dashboard
+* Web account-linking page
 * Cloudflare Worker
 * Google Calendar
 
@@ -34,9 +34,10 @@ Thiết bị phải tiếp tục thực hiện các chức năng local cơ bản
 
 ### 3.2. Google Calendar
 
-* Đăng nhập bằng Google.
-* Cấp quyền cho ứng dụng đọc Google Calendar.
-* Lấy các event cần thiết.
+* Người dùng mở trang web của thiết bị để đăng nhập Google và cấp quyền chỉ đọc Calendar.
+* Người dùng chọn calendar cần đồng bộ.
+* Worker lấy và chuẩn hóa các event cần thiết; ESP32 nhận dữ liệu qua API contract.
+* Đăng xuất xóa liên kết Calendar đang dùng cho `device_id`; khi đăng nhập tài khoản khác, tài khoản mới thay thế liên kết cũ của thiết bị đó.
 * Hiển thị:
 
   * title
@@ -66,9 +67,16 @@ Khi mất Wi-Fi:
 * RGB LED và buzzer vẫn hoạt động.
 * Thiết bị không được treo vì đang chờ Wi-Fi.
 
+### 3.6. Màn hình và nút bấm
+
+* E-paper là màn hình chính cho lịch, ghi chú trong mô tả event, và Pomodoro.
+* LCD1602 là màn phụ hiển thị đồng hồ/ngày và trạng thái Pomodoro.
+* Dùng bốn nút MODE, UP, DOWN, OK. MODE đổi màn; giữ MODE 5 giây yêu cầu deep sleep. UP/DOWN điều hướng nội dung hoặc chỉnh thời lượng Pomodoro. OK mở ghi chú hoặc bắt đầu/tạm dừng Pomodoro.
+* Hành vi chi tiết có thể được tinh chỉnh khi dựng lại firmware, nhưng không được giảm còn ba nút.
+
 ## 4. Kiến trúc
 
-Người dùng → Web Dashboard → Google OAuth → Cloudflare Worker → Google Calendar.
+Người dùng → Web account-linking page → Google OAuth → Cloudflare Worker → Google Calendar.
 
 Cloudflare Worker chuyển dữ liệu thành JSON chuẩn của Desk Buddy và cung cấp cho NodeMCU-32S.
 
@@ -83,7 +91,7 @@ NodeMCU-32S điều khiển hai màn hình, RTC, RGB LED, buzzer và các chức
 * Pin cúc áo dự phòng cho DS3231 (không cấp nguồn cho toàn thiết bị)
 * RGB LED
 * Piezo buzzer
-* 3 nút nhấn
+* 4 nút nhấn: MODE, UP, DOWN, OK
 * Bộ chuyển mức I²C 3.3 V ↔ 5 V cho LCD1602 nếu backpack kéo SDA/SCL lên 5 V
 * Nguồn USB 5 V qua cổng của NodeMCU-32S
 * Dây/kết nối cần thiết

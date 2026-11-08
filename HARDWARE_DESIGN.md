@@ -6,7 +6,7 @@
 - Large display: WeAct Studio 2.9-inch monochrome e-paper over SPI. The family is commonly 128×296 pixels, but the board revision/controller marking still needs checking before choosing the exact firmware driver class.
 - Small display: 16×2 character LCD with an I²C interface/backpack.
 - RTC: DS3231 breakout with a suitable backup cell.
-- Indicators and input: RGB LED, piezo buzzer, and three momentary push buttons.
+- Indicators and input: RGB LED, piezo buzzer, and four momentary push buttons (MODE, UP, DOWN, OK).
 - The extra Arduino Nano boards are not needed for this prototype; the ESP32 has enough GPIO and handles Wi-Fi plus local timers.
 
 This pin map is for the classic ESP-WROOM-32 DevKit and SPI e-paper. It is not for an ESP32-S3 or WROVER board.
@@ -16,7 +16,7 @@ This pin map is for the classic ESP-WROOM-32 DevKit and SPI e-paper. It is not f
 - E-paper: show today's events and the next event. Refresh only when the data changes or every few minutes; do not animate a seconds clock on e-paper.
 - 16×2 LCD: show the live clock on row 1 and Pomodoro state/countdown on row 2.
 - DS3231: keep time while USB power is removed. Its coin cell powers the RTC only, not the ESP32 or displays.
-- Buttons: Start/Pause, Reset, and Next event/Acknowledge reminder.
+- Buttons: tap MODE to cycle Calendar, Notes, Pomodoro, and Account; hold MODE for 5 seconds for deep sleep; UP/DOWN scroll events and note pages or adjust Pomodoro duration; OK opens a note or starts/pauses Pomodoro.
 - RGB LED and buzzer: indicate focus, break, upcoming event, and timer completion.
 
 ## Suggested ESP32-WROOM-32 DevKit pin map
@@ -31,9 +31,10 @@ This pin map is for the classic ESP-WROOM-32 DevKit and SPI e-paper. It is not f
 | E-paper BUSY | GPIO34 | Input only; appropriate for BUSY. Do not rely on an internal pull-up on GPIO34. |
 | I²C SDA | GPIO21 | Shared by DS3231 and the low-voltage side of the LCD level shifter |
 | I²C SCL | GPIO22 | Shared by DS3231 and the low-voltage side of the LCD level shifter |
-| Start/Pause button | GPIO32 | Button connects pin to GND; configure `INPUT_PULLUP` |
-| Reset button | GPIO33 | Button connects pin to GND; configure `INPUT_PULLUP` |
-| Next/Acknowledge button | GPIO19 | Button connects pin to GND; configure `INPUT_PULLUP` |
+| MODE button | GPIO32 | Button connects pin to GND; configure `INPUT_PULLUP` |
+| UP button | GPIO33 | Button connects pin to GND; configure `INPUT_PULLUP` |
+| DOWN button | GPIO19 | Button connects pin to GND; configure `INPUT_PULLUP` |
+| OK button | GPIO35 | Input-only pin: add an external 10 kΩ pull-up to 3.3 V; button connects pin to GND |
 | RGB red | GPIO13 | One current-limiting resistor per LED color |
 | RGB green | GPIO14 | One current-limiting resistor per LED color |
 | RGB blue | GPIO16 | For ESP-WROOM-32; avoid GPIO16/17 on boards where PSRAM uses them |
@@ -65,7 +66,8 @@ USB 5 V ──> ESP32 DevKit ── 3V3 ──> SPI e-paper
                   ├── GPIO21/22 ──> DS3231 I²C + level shifter low side
                   │                         level shifter high side ──> LCD backpack SDA/SCL
                   ├── 5 V ────────────────────────────────────────────> LCD VCC/backlight
-                  ├── GPIO32/33/19 ──> buttons to GND
+                  ├── GPIO32/33/19 ──> MODE/UP/DOWN buttons to GND
+                  ├── GPIO35 ──> OK button to GND (external 10 kΩ pull-up to 3.3 V)
                   ├── GPIO13/14/16 ──> RGB LED through resistors
                   └── GPIO17 ──> transistor ──> buzzer
 

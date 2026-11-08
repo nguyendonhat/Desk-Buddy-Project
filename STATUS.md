@@ -24,7 +24,7 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 - `npm run check` in `worker/cloudflare`: passed.
 - Timezone tests: 5 web + 4 Worker cases passed.
 - Worker Wrangler dry-run: passed; bundle includes the production KV binding and Pages origin. Live Worker still reports the old `desk-buddy-worker`/`local` health response, confirming the updated source is not deployed.
-- Cloudflare Preview build exposed that Wrangler requires an explicit `previews` configuration block. Preview now has its own KV namespace; a new Preview build is pending after the config update.
+- Cloudflare Preview build exposed that Wrangler requires an explicit `previews` configuration block. Preview now has its own KV namespace, and the Preview build command explicitly points to the Worker config; a new Preview build is pending.
 - `pio test -e native`: not run successfully; machine lacks `gcc/g++`.
 - Physical ESP32/e-paper upload and display: not verified. Last port check only showed COM3/COM4 Bluetooth, no ESP32 serial device.
 - QR scan on physical panel: not verified.

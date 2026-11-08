@@ -13,7 +13,7 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 - Button pin map in firmware/docs: MODE GPIO32, UP GPIO33, DOWN GPIO19, OK GPIO35. GPIO35 requires an external 10 kΩ pull-up to 3.3 V on real hardware.
 - Firmware display driver currently targets `GxEPD2_290_GDEY029T94`. The exact physical WeAct panel revision still needs confirmation from its rear label.
 - The Wokwi mock uses `GxEPD2_290_BS`, mock events, and virtual buttons. It is not the production firmware and does not test real Google OAuth or the physical WeAct panel.
-- Google OAuth + Calendar code exists. Worker source now uses the `DESK_BUDDY_STORE` KV binding for OAuth state, browser sessions, and tokens. The production KV namespace exists and is bound to `desk-buddy-api`; the updated Worker source has not yet been deployed or verified against live Google OAuth.
+- Google OAuth + Calendar code exists. Worker source now uses the `DESK_BUDDY_STORE` KV binding for OAuth state, browser sessions, and tokens. Separate production and Preview KV namespaces exist. Production is bound to `desk-buddy-api`; the updated Worker source has not yet been deployed or verified against live Google OAuth.
 - Weather feed and location configuration are not implemented. Pomodoro break cycles are not implemented.
 
 ## Last verified checks
@@ -24,6 +24,7 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 - `npm run check` in `worker/cloudflare`: passed.
 - Timezone tests: 5 web + 4 Worker cases passed.
 - Worker Wrangler dry-run: passed; bundle includes the production KV binding and Pages origin. Live Worker still reports the old `desk-buddy-worker`/`local` health response, confirming the updated source is not deployed.
+- Cloudflare Preview build exposed that Wrangler requires an explicit `previews` configuration block. Preview now has its own KV namespace; a new Preview build is pending after the config update.
 - `pio test -e native`: not run successfully; machine lacks `gcc/g++`.
 - Physical ESP32/e-paper upload and display: not verified. Last port check only showed COM3/COM4 Bluetooth, no ESP32 serial device.
 - QR scan on physical panel: not verified.

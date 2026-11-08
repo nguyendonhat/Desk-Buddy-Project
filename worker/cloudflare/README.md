@@ -4,7 +4,7 @@
 
 OAuth state, browser sessions, and Google tokens use a Cloudflare Workers KV namespace bound as `DESK_BUDDY_STORE`. Without this binding, OAuth routes cannot persist state between requests.
 
-The production namespace `DESK_BUDDY_STORE` has been created and bound to the `desk-buddy-api` Worker. Its ID is recorded in `wrangler.toml`. For another environment, create a separate namespace:
+The production namespace `DESK_BUDDY_STORE` has been created and bound to the `desk-buddy-api` Worker. Preview builds use a separate namespace so tests cannot overwrite production OAuth connections. Both IDs are recorded in `wrangler.toml`. For another environment, create a separate namespace:
 
 ```powershell
 npx wrangler kv namespace create DESK_BUDDY_STORE

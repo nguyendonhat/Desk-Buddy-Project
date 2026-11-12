@@ -4,6 +4,7 @@
 #define WIFI_SSID "replace-with-wifi-name"
 #define WIFI_PASSWORD "replace-with-wifi-password"
 #define API_BASE_URL "https://your-worker.example.workers.dev"
+#define WEB_APP_URL "https://your-desk-buddy-web.example.com"
 #define DEVICE_ID "DB001"
 #define DEVICE_API_TOKEN "replace-with-the-matching-worker-device-token"
 

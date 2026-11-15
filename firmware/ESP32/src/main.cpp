@@ -239,7 +239,17 @@ void drawCalendar() {
       if (selected < 0) {
         epaperText.setCursor(8, 56); epaperText.print("Khong co su kien trong ngay");
       } else if (navigation.screen == deskbuddy::Screen::Calendar) {
-        epaperText.setCursor(8, 52); epaperText.print(events[selected].start.substring(11, 16)); epaperText.print(" ");
+        String timeLabel = "Ca ngay";
+        if (events[selected].start.length() >= 11 && events[selected].start[10] == 'T') {
+          char localTime[6] = "--:--";
+          int hour = 0, minute = 0;
+          if (deskbuddy::parseEventLocalClock(std::string(events[selected].start.c_str()),
+                                              LOCAL_UTC_OFFSET_SECONDS, hour, minute)) {
+            snprintf(localTime, sizeof(localTime), "%02d:%02d", hour, minute);
+          }
+          timeLabel = localTime;
+        }
+        epaperText.setCursor(8, 52); epaperText.print(timeLabel); epaperText.print(" ");
         epaperText.print(events[selected].title.substring(0, 27));
         epaperText.setCursor(8, 82); epaperText.print("Su kien "); epaperText.print(navigation.eventIndex + 1);
         epaperText.setCursor(8, 108); epaperText.print("OK: xem ghi chu");

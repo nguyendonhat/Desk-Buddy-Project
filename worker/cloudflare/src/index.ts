@@ -46,6 +46,7 @@ const STATE_KEY_PREFIX = 'oauth-state:';
 const SESSION_KEY_PREFIX = 'oauth-session:';
 const CONNECTION_KEY_PREFIX = 'connection:';
 const CALENDAR_PAGE_SIZE = 250;
+export const CALENDAR_DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 const CALENDAR_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const jsonHeaders = { 'content-type': 'application/json; charset=utf-8' };
 
@@ -303,7 +304,7 @@ async function getCalendarEvents(connection: Connection, env: Env, window: Calen
   apiUrl.searchParams.set('maxResults', String(CALENDAR_PAGE_SIZE));
   apiUrl.searchParams.set('singleEvents', 'true');
   apiUrl.searchParams.set('orderBy', 'startTime');
-  if (connection.selectedCalendarTimeZone) apiUrl.searchParams.set('timeZone', connection.selectedCalendarTimeZone);
+  apiUrl.searchParams.set('timeZone', CALENDAR_DISPLAY_TIME_ZONE);
   if (pageToken) apiUrl.searchParams.set('pageToken', pageToken);
   return authorizedGoogleFetch(connection, env, apiUrl);
 }
@@ -350,7 +351,7 @@ export function normalizeCalendarEvent(event: {
   description?: string;
   start?: { dateTime?: string; date?: string; timeZone?: string };
   end?: { dateTime?: string; date?: string; timeZone?: string };
-}, calendarTimeZone?: string): {
+}): {
   title: string;
   start: string;
   end: string;
@@ -361,15 +362,13 @@ export function normalizeCalendarEvent(event: {
   const start = event.start?.dateTime ?? event.start?.date;
   const end = event.end?.dateTime ?? event.end?.date;
   if (!start || !end) return undefined;
-  const startTimeZone = event.start?.timeZone ?? calendarTimeZone;
-  const endTimeZone = event.end?.timeZone ?? calendarTimeZone;
   return {
     title: event.summary ?? '',
     start,
     end,
     description: event.description ?? '',
-    ...(startTimeZone ? { start_time_zone: startTimeZone } : {}),
-    ...(endTimeZone ? { end_time_zone: endTimeZone } : {}),
+    start_time_zone: CALENDAR_DISPLAY_TIME_ZONE,
+    end_time_zone: CALENDAR_DISPLAY_TIME_ZONE,
   };
 }
 
@@ -424,7 +423,7 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
     while (page) {
       const beforeNormalizeCount = events.length;
       for (const event of page.items ?? []) {
-        const normalized = normalizeCalendarEvent(event, connection.selectedCalendarTimeZone);
+        const normalized = normalizeCalendarEvent(event);
         if (normalized) {
           events.push(normalized);
           console.info('[calendar-timezone-debug]', JSON.stringify({

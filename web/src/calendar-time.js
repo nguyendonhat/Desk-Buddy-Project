@@ -1,6 +1,7 @@
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const EXPLICIT_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/i;
 const DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?/;
+const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 function hasExplicitOffset(value) {
   return EXPLICIT_OFFSET_PATTERN.test(value);
@@ -19,9 +20,9 @@ function zonedDateTimeParts(value, timeZone) {
   return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map(({ type, value: partValue }) => [type, partValue]));
 }
 
-function localDateTimeAsInstant(value, timeZone) {
+function localDateTimeAsInstant(value) {
   const match = value.match(DATE_TIME_PATTERN);
-  if (!match || !timeZone) return Date.parse(value);
+  if (!match) return Date.parse(value);
 
   const [, year, month, day, hour, minute, second = '00', fraction = '0'] = match;
   const target = {
@@ -34,7 +35,7 @@ function localDateTimeAsInstant(value, timeZone) {
 
   // Resolve a local wall time using its IANA zone. Iteration naturally accounts for DST offsets.
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const parts = zonedDateTimeParts(new Date(instant).toISOString(), timeZone);
+    const parts = zonedDateTimeParts(new Date(instant).toISOString(), DISPLAY_TIME_ZONE);
     const representedAsUtc = Date.UTC(
       Number(parts.year), Number(parts.month) - 1, Number(parts.day),
       Number(parts.hour), Number(parts.minute), target.second,
@@ -46,27 +47,27 @@ function localDateTimeAsInstant(value, timeZone) {
   return instant;
 }
 
-export function calendarEventTimestamp(value, timeZone) {
+export function calendarEventTimestamp(value) {
   if (DATE_ONLY_PATTERN.test(value)) return Date.parse(`${value}T00:00:00Z`);
-  return hasExplicitOffset(value) ? Date.parse(value) : localDateTimeAsInstant(value, timeZone);
+  return hasExplicitOffset(value) ? Date.parse(value) : localDateTimeAsInstant(value);
 }
 
-export function calendarEventDateKey(value, timeZone) {
-  if (DATE_ONLY_PATTERN.test(value) || !hasExplicitOffset(value) || !timeZone) return value.slice(0, 10);
+export function calendarEventDateKey(value) {
+  if (DATE_ONLY_PATTERN.test(value) || !hasExplicitOffset(value)) return value.slice(0, 10);
   try {
-    const parts = zonedDateTimeParts(value, timeZone);
+    const parts = zonedDateTimeParts(value, DISPLAY_TIME_ZONE);
     return `${parts.year}-${parts.month}-${parts.day}`;
   } catch {
     return value.slice(0, 10);
   }
 }
 
-export function formatCalendarEventTime(value, timeZone) {
+export function formatCalendarEventTime(value) {
   if (DATE_ONLY_PATTERN.test(value)) return 'Cả ngày';
-  if (hasExplicitOffset(value) && timeZone) {
+  if (hasExplicitOffset(value)) {
     try {
       return new Intl.DateTimeFormat('vi-VN', {
-        timeZone,
+        timeZone: DISPLAY_TIME_ZONE,
         hour: '2-digit',
         minute: '2-digit',
         hourCycle: 'h23',

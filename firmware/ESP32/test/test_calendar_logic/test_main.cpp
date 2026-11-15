@@ -3,6 +3,7 @@
 #include "calendar_logic.h"
 
 using deskbuddy::isWithinReminderWindow;
+using deskbuddy::parseEventLocalClock;
 using deskbuddy::parseEventLocalEpoch;
 using deskbuddy::shouldBeepForEvent;
 
@@ -22,6 +23,13 @@ void test_other_offset_converts_to_vietnam_time() {
   int64_t epoch = 0;
   TEST_ASSERT_TRUE(parseEventLocalEpoch("2026-10-07T02:00:00+02:00", 7 * 3600, epoch));
   TEST_ASSERT_EQUAL_INT64(1791356400LL, epoch);
+}
+
+void test_event_clock_converts_to_vietnam_time_for_display() {
+  int hour = 0, minute = 0;
+  TEST_ASSERT_TRUE(parseEventLocalClock("2026-10-07T11:00:00Z", 7 * 3600, hour, minute));
+  TEST_ASSERT_EQUAL_INT(18, hour);
+  TEST_ASSERT_EQUAL_INT(0, minute);
 }
 
 void test_all_day_event_has_no_reminder_time() {
@@ -51,6 +59,7 @@ int main() {
   RUN_TEST(test_utc_event_converts_to_vietnam_local_clock);
   RUN_TEST(test_vietnam_offset_event_keeps_local_wall_time);
   RUN_TEST(test_other_offset_converts_to_vietnam_time);
+  RUN_TEST(test_event_clock_converts_to_vietnam_time_for_display);
   RUN_TEST(test_all_day_event_has_no_reminder_time);
   RUN_TEST(test_invalid_calendar_date_is_rejected);
   RUN_TEST(test_reminder_window_includes_edges_and_excludes_past_events);

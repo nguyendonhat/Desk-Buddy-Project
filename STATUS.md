@@ -1,6 +1,6 @@
 # Desk Buddy — current project status
 
-Last checked: 2026-11-08
+Last checked: 2026-11-16
 
 ## Project goal
 
@@ -13,16 +13,19 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 - Button pin map in firmware/docs: MODE GPIO32, UP GPIO33, DOWN GPIO19, OK GPIO35. GPIO35 requires an external 10 kΩ pull-up to 3.3 V on real hardware.
 - Firmware display driver currently targets `GxEPD2_290_GDEY029T94`. The exact physical WeAct panel revision still needs confirmation from its rear label.
 - The Wokwi mock uses `GxEPD2_290_BS`, mock events, and virtual buttons. It is not the production firmware and does not test real Google OAuth or the physical WeAct panel.
-- Google OAuth + Calendar code exists. Worker stores OAuth state, browser sessions, and tokens in `DESK_BUDDY_STORE`; Production and Preview use separate KV namespaces. PR #2 was merged to `main`; Production health returns `{"success":true,"service":"desk-buddy-api","environment":"production"}`. The user confirmed Google login and logout work. Calendar fetch/render on the physical ESP32 remains unverified.
+- Wokwi sketch now has a mock NOTE flow (month grid → selected-day events → paged note/exit) and keeps the LCD on date/time while Pomodoro runs. PlatformIO compiles the Wokwi sketch via `src/main.cpp`; build passed, but button behavior in the running simulator is not yet verified.
+- Google OAuth + Calendar code exists. Worker stores OAuth state, browser sessions, and tokens in `DESK_BUDDY_STORE`; Production and Preview use separate KV namespaces. PR #2 was merged to `main`; Production health returns `{"success":true,"service":"desk-buddy-api","environment":"production"}`. The user confirmed Google login and logout work. Huan reports Calendar events displayed on the physical ESP32; the updated Vietnam timezone display still needs a reflash and hardware check.
+- Calendar event times are now forced to Vietnam (`Asia/Ho_Chi_Minh`, UTC+7) by the Worker, web app, and ESP32 rendering. Web/Worker timezone checks and the ESP32 firmware build passed on 2026-11-16; Huan must reflash and confirm the physical display after this change.
 - Weather feed and location configuration are not implemented. Pomodoro break cycles are not implemented.
 
 ## Last verified checks
 
+- Rechecked on 2026-11-16: `npm run build` and `npm run test:timezone` in `web`, `npm run check` and `npm run test:timezone` in `worker/cloudflare`, and `pio run -e nodemcu-32s` passed. `pio test -e native` could not compile because `gcc`/`g++` are missing.
 - `pio run -e nodemcu-32s`: previously passed; firmware compiled, approximately 97% of configured app flash. This does not establish that the prototype works in Wokwi or on hardware.
-- `pio run -e esp32dev` in `simulation/wokwi`: previously passed, but the team reports the simulation does not work as intended. Recheck after rebuilding; current functional status is not accepted.
+- `pio run -e esp32dev` in `simulation/wokwi`: passed on 2026-11-09 after configuring PlatformIO to build the mock sketch. This is compile-only; the team previously reported simulation issues, and current runtime behavior is not yet accepted.
 - `npm run build` in `web`: passed.
 - `npm run check` in `worker/cloudflare`: passed.
-- Timezone tests: 5 web + 4 Worker cases passed.
+- Timezone tests: 6 web + 3 Worker cases passed on 2026-11-16.
 - Worker Wrangler dry-run: previously passed; bundle included the production KV binding and Pages origin.
 - Cloudflare Preview build for commit `5fb1919` completed successfully (version `21736982`). `https://issue-1-oauth-kv-desk-buddy-api.deskbuddy67.workers.dev/api/health` returns `{"success":true,"service":"desk-buddy-api","environment":"preview"}`. Preview uses its own KV namespace and does not inherit Production OAuth secrets, so a full Google login has not been tested there.
 - Production health was checked after PR #2 merged and returns `{"success":true,"service":"desk-buddy-api","environment":"production"}`. The user confirmed deployed web login/logout work. Calendar fetch/render end-to-end remains unverified.

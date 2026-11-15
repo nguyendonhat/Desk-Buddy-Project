@@ -16,5 +16,5 @@ replace-with-the-root-ca-pem
 -----END CERTIFICATE-----
 )CERT";
 
-// Vietnam time is UTC+7. Set this to the calendar's local offset if changed.
+// Calendar display and RTC reminders use Vietnam time (UTC+7).
 constexpr long LOCAL_UTC_OFFSET_SECONDS = 7 * 60 * 60;

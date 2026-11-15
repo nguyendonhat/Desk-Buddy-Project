@@ -48,7 +48,7 @@ For production, the Worker cookie uses `SameSite=None; Secure` so the web app ca
 
 - RTC time is synchronized from NTP when Wi-Fi is available and continues from DS3231 when Wi-Fi is lost.
 - Calendar refresh runs every five minutes; the e-paper redraws only after a successful fetch.
-- Calendar reminder time conversion assumes Vietnam UTC+7. Change `LOCAL_UTC_OFFSET_SECONDS` and the POSIX TZ string if using a different local zone.
+- Clock, calendar display, and reminders are fixed to Vietnam time (`Asia/Ho_Chi_Minh`, UTC+7). The POSIX TZ string `ICT-7` represents UTC+7.
 - Calendar rendering/sync, Pomodoro, and offline behavior must be verified again as firmware is rebuilt. Break intervals, event caching, and enclosure wiring validation are not confirmed complete.
 
 ## Test without hardware

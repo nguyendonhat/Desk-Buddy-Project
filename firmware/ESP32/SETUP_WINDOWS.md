@@ -7,7 +7,7 @@
    .\setup.ps1
    ```
 
-3. On first run, provide Wi-Fi, the Worker and web app URLs, the device ID, that device's API token, and a PEM CA certificate file. The script writes these values to `src/config.h`, which Git ignores, then builds the firmware. Later runs reuse the existing local config and build again.
+3. On first run, provide the Worker and web app URLs, the device ID, that device's API token, and a PEM CA certificate file. The script writes these service settings to `src/config.h`, which Git ignores, then builds the firmware. Wi-Fi is configured on the device after upload. Later runs reuse the existing local config and build again.
 4. To build using an already prepared `src/config.h` without prompts, run:
 
    ```powershell

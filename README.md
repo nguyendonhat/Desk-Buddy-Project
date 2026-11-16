@@ -152,6 +152,10 @@ QR cần các địa chỉ public đã deploy; địa chỉ localhost chỉ ch�
 
 Địa chỉ web và Worker nên cùng một site/domain gốc để trình duyệt cho phép session hoạt động ổn định. Worker lưu liên kết và OAuth token trong KV binding `DESK_BUDDY_STORE`.
 
+### Cấu hình Wi-Fi trên thiết bị
+
+Lần đầu khởi động (hoặc khi mạng đã lưu không kết nối được), ESP32 tạo Wi-Fi tạm có mật khẩu ngẫu nhiên hiển thị trên e-paper. Dùng điện thoại kết nối mạng `DeskBuddy-<device_id>`, mở `http://192.168.4.1`, chọn Wi-Fi nhà và nhập mật khẩu. ESP32 lưu cấu hình trong bộ nhớ nội bộ rồi khởi động lại. Muốn đổi mạng đã lưu, vào màn hình Tài khoản và giữ MODE 5 giây. Giữ MODE 5 giây ở màn hình khác vẫn đưa thiết bị vào deep sleep.
+
 ### TypeScript check Worker
 
 ```powershell
@@ -177,7 +181,6 @@ npm run check
    Copy-Item firmware\ESP32\src\config.example.h firmware\ESP32\src\config.h
    ```
 3. Mở `firmware/ESP32/src/config.h` và điền:
-   - `WIFI_SSID` / `WIFI_PASSWORD`
    - `API_BASE_URL` — URL HTTPS của Worker đã deploy (`https://...workers.dev`)
    - `WEB_APP_URL` — URL web app đã deploy (không có query string)
    - `DEVICE_ID` — `DB001`
@@ -189,6 +192,7 @@ npm run check
    cd firmware\ESP32
    pio run -e nodemcu-32s
    ```
+   PlatformIO dùng partition table riêng với hai app slot 1.94 MB để phù hợp dung lượng firmware trên ESP32 flash 4 MB.
 5. Khi ESP32 đã cắm và cổng COM xuất hiện, nạp firmware:
    ```powershell
    pio run -e nodemcu-32s --target upload
@@ -279,9 +283,8 @@ Test kiểm tra: parse RFC3339, tính reminder, điều hướng màn. Yêu cầ
 |---|---|
 | **Nạp firmware thật** | Cần ESP32 xuất hiện ở cổng COM (kiểm tra driver USB-serial và cáp data) |
 | **Xác nhận driver e-paper** | Xem mã trên mặt sau panel; thay driver trong `main.cpp` nếu cần |
-| **Thời tiết** | Chưa triển khai; cần cấu hình vị trí và nguồn API thời tiết |
 | **Chu kỳ nghỉ Pomodoro** | Chưa có; countdown cơ bản đã hoạt động |
-| **Wi-Fi provisioning dễ dùng** | Chưa có; SSID/password cứng trong `config.h` |
+| **Cấu hình Wi-Fi** | Đã có; kết nối access point của ESP32, chọn mạng và nhập mật khẩu trên trang cục bộ |
 | **Ghi chú dài phân trang** | Code đã có; chưa thử trên phần cứng thật |
 | **Lưu trữ OAuth bền vững** | Worker Production đã dùng KV; Preview dùng namespace riêng |
 | **Đăng nhập/đăng xuất Google** | Người dùng xác nhận hoạt động trên web đã deploy; Calendar trên ESP32 thật chưa xác minh |

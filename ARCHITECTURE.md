@@ -49,6 +49,7 @@ NodeMCU-32S (ESP32-WROOM-32)
 
 * Kết nối Wi-Fi.
 * Reconnect Wi-Fi.
+* Phát access point cấu hình lần đầu/đổi mạng; nhận SSID và mật khẩu qua trang cục bộ rồi lưu trong NVS.
 * Gọi API Calendar.
 * Parse JSON chuẩn.
 * Hiển thị dữ liệu.

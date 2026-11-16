@@ -10,6 +10,7 @@
 #include <U8g2_for_Adafruit_GFX.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <WebServer.h>
 #include <Wire.h>
 #include <esp_sleep.h>
 
@@ -36,6 +37,7 @@ constexpr int BUTTON_OK = 35; // Input-only; requires an external 10 kOhm pull-u
 
 constexpr uint32_t CALENDAR_REFRESH_MS = 5UL * 60UL * 1000UL;
 constexpr uint32_t WIFI_RETRY_MS = 10UL * 1000UL;
+constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 12000UL;
 constexpr size_t MAX_EVENTS = 8;
 constexpr long REMINDER_WINDOW_SECONDS = 15L * 60L;
 
@@ -70,6 +72,12 @@ uint32_t pomodoroDeadlineMs = 0;
 uint32_t pomodoroRemainingSeconds = 25UL * 60UL;
 bool pomodoroHasStarted = false;
 Preferences uiPreferences;
+Preferences wifiPreferences;
+WebServer wifiConfigServer(80);
+String wifiSsid;
+String wifiPassword;
+String wifiApName;
+String wifiApPassword;
 bool noteStateDirty = false;
 uint32_t noteStateChangedAt = 0;
 
@@ -176,6 +184,133 @@ void showLcdMessage(const char* first, const char* second) {
   lcd.print(first);
   lcd.setCursor(0, 1);
   lcd.print(second);
+}
+
+String htmlEscape(const String& value) {
+  String escaped;
+  escaped.reserve(value.length() + 8);
+  for (size_t i = 0; i < value.length(); ++i) {
+    switch (value[i]) {
+      case '&': escaped += F("&amp;"); break;
+      case '<': escaped += F("&lt;"); break;
+      case '>': escaped += F("&gt;"); break;
+      case '\"': escaped += F("&quot;"); break;
+      case '\'': escaped += F("&#39;"); break;
+      default: escaped += value[i]; break;
+    }
+  }
+  return escaped;
+}
+
+String wifiConfigPage(const String& message = "") {
+  const int count = WiFi.scanNetworks(false, true);
+  String options;
+  for (int i = 0; i < count; ++i) {
+    const String ssid = WiFi.SSID(i);
+    if (!ssid.length()) continue;
+    options += F("<option value=\"");
+    options += htmlEscape(ssid);
+    options += F("\">");
+    options += htmlEscape(ssid);
+    options += F(" (");
+    options += String(WiFi.RSSI(i));
+    options += F(" dBm)</option>");
+  }
+  if (!options.length()) options = F("<option value=\"\">Không tìm thấy mạng; thử quét lại</option>");
+
+  String page = F("<!doctype html><html lang=\"vi\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+  page += F("<title>Cài Wi-Fi Desk Buddy</title><style>body{font:16px system-ui;max-width:440px;margin:36px auto;padding:0 18px;color:#222}select,input,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0 16px;font-size:16px}button{background:#222;color:white;border:0;border-radius:6px}</style>");
+  page += F("<h1>Cài Wi-Fi Desk Buddy</h1><p>Chọn mạng Wi-Fi và nhập mật khẩu. Mật khẩu chỉ lưu trên thiết bị.</p><p>");
+  page += htmlEscape(message);
+  page += F("</p><form method=\"post\" action=\"/save\"><label>Mạng Wi-Fi</label><select name=\"ssid\" required>");
+  page += options;
+  page += F("</select><label>Mật khẩu Wi-Fi</label><input name=\"password\" type=\"password\" autocomplete=\"current-password\"><button type=\"submit\">Lưu và kết nối</button></form><form method=\"get\"><button>Quét lại mạng</button></form></html>");
+  return page;
+}
+
+void showWifiSetupScreen() {
+  epaper.setRotation(1);
+  epaper.setFullWindow();
+  epaper.firstPage();
+  do {
+    epaper.fillScreen(GxEPD_WHITE);
+    epaperText.begin(epaper);
+    epaperText.setFontMode(1);
+    epaperText.setForegroundColor(GxEPD_BLACK);
+    epaperText.setBackgroundColor(GxEPD_WHITE);
+    epaperText.setFont(u8g2_font_unifont_t_vietnamese2);
+    epaperText.setCursor(8, 20); epaperText.print("Cai dat Wi-Fi");
+    epaperText.setCursor(8, 47); epaperText.print("Ket noi: "); epaperText.print(wifiApName);
+    epaperText.setCursor(8, 73); epaperText.print("Mat khau: "); epaperText.print(wifiApPassword);
+    epaperText.setCursor(8, 100); epaperText.print("Mo trinh duyet: 192.168.4.1");
+    epaperText.setCursor(8, 122); epaperText.print("Nhap Wi-Fi nha cua ban");
+  } while (epaper.nextPage());
+  epaper.hibernate();
+  showLcdMessage("Cai dat Wi-Fi", "192.168.4.1");
+}
+
+void startWifiSetup() {
+  wifiApName = String("DeskBuddy-") + DEVICE_ID;
+  char generatedPassword[11];
+  snprintf(generatedPassword, sizeof(generatedPassword), "%010lu",
+           static_cast<unsigned long>(esp_random() % 10000000000ULL));
+  wifiApPassword = generatedPassword;
+  WiFi.disconnect(false, false);
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(wifiApName.c_str(), wifiApPassword.c_str());
+
+  wifiConfigServer.on("/", HTTP_GET, []() {
+    wifiConfigServer.send(200, "text/html; charset=utf-8", wifiConfigPage());
+  });
+  wifiConfigServer.on("/save", HTTP_POST, []() {
+    const String ssid = wifiConfigServer.arg("ssid");
+    const String password = wifiConfigServer.arg("password");
+    if (!ssid.length() || ssid.length() > 32 || password.length() > 63) {
+      wifiConfigServer.send(400, "text/html; charset=utf-8", wifiConfigPage("Tên mạng hoặc mật khẩu không hợp lệ."));
+      return;
+    }
+    if (!wifiPreferences.begin("wifi", false)) {
+      wifiConfigServer.send(500, "text/plain; charset=utf-8", "Không lưu được cấu hình Wi-Fi.");
+      return;
+    }
+    wifiPreferences.putString("ssid", ssid);
+    wifiPreferences.putString("password", password);
+    wifiPreferences.end();
+    wifiConfigServer.send(200, "text/html; charset=utf-8",
+      "<!doctype html><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><h2>Đã lưu Wi-Fi</h2><p>Desk Buddy đang khởi động lại và kết nối mạng.</p>");
+    delay(1200);
+    ESP.restart();
+  });
+  wifiConfigServer.onNotFound([]() {
+    wifiConfigServer.sendHeader("Location", "http://192.168.4.1/");
+    wifiConfigServer.send(302, "text/plain", "");
+  });
+  wifiConfigServer.begin();
+  Serial.printf("Wi-Fi setup AP: %s, address: 192.168.4.1\n", wifiApName.c_str());
+  showWifiSetupScreen();
+  while (true) {
+    wifiConfigServer.handleClient();
+    delay(5);
+  }
+}
+
+bool connectSavedWifi() {
+  if (!wifiPreferences.begin("wifi", true)) return false;
+  wifiSsid = wifiPreferences.getString("ssid", "");
+  wifiPassword = wifiPreferences.getString("password", "");
+  wifiPreferences.end();
+  if (!wifiSsid.length()) return false;
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
+  const uint32_t startedAt = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < WIFI_CONNECT_TIMEOUT_MS) delay(100);
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("Wi-Fi connected: %s\n", wifiSsid.c_str());
+    return true;
+  }
+  Serial.println("Saved Wi-Fi did not connect; opening setup portal.");
+  return false;
 }
 
 void drawCalendar() {
@@ -342,11 +477,12 @@ void fetchCalendar() {
 
 void connectWifi() {
   if (WiFi.status() == WL_CONNECTED) return;
+  if (!wifiSsid.length()) return;
   const uint32_t now = millis();
   if (lastWifiAttempt != 0 && now - lastWifiAttempt < WIFI_RETRY_MS) return;
   lastWifiAttempt = now;
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
 }
 
 void syncRtcFromNtp() {
@@ -417,11 +553,7 @@ void setup() {
   epaperText.begin(epaper);
   drawCalendar();
 
-  connectWifi();
-  const uint32_t waitStart = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - waitStart < 12000) {
-    delay(100);
-  }
+  if (!connectSavedWifi()) startWifiSetup();
   if (WiFi.status() == WL_CONNECTED) syncRtcFromNtp();
   updateLcd();
   fetchCalendar();
@@ -442,7 +574,11 @@ void loop() {
   const uint32_t now = millis();
   if (digitalRead(BUTTON_MODE) == LOW) {
     if (modePressedAt == 0) modePressedAt = now;
-    if (now - modePressedAt >= 5000) enterSleepMode();
+    if (now - modePressedAt >= 5000) {
+      modePressedAt = now;
+      if (navigation.screen == deskbuddy::Screen::Account) startWifiSetup();
+      else enterSleepMode();
+    }
   } else {
     modePressedAt = 0;
   }

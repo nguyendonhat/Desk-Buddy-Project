@@ -24,9 +24,17 @@ This first firmware increment connects a NodeMCU-32S to Wi-Fi, reads the DS3231,
 
 1. Install PlatformIO and open `firmware/ESP32` as the project.
 2. Copy `src/config.example.h` to `src/config.h`.
-3. Set the Wi-Fi name/password, deployed HTTPS Worker URL, `DB001`, and the matching device token configured in the Worker secret `DEVICE_API_TOKENS`.
+3. Set the deployed HTTPS Worker URL, `DB001`, and the matching device token configured in the Worker secret `DEVICE_API_TOKENS`.
 4. Set `WEB_APP_URL` to the deployed HTTPS web app and put the root CA PEM that validates the Worker URL in `API_ROOT_CA_PEM`. TLS certificate validation stays enabled. The web app's `VITE_API_BASE_URL` must point to that same deployed Worker.
 5. Connect the hardware and upload the `nodemcu-32s` environment.
+
+## Configure Wi-Fi on the device
+
+- On first boot, or when the saved network cannot connect, the ESP32 starts a temporary password-protected access point. The e-paper shows its network name, one-time password, and `192.168.4.1`.
+- Connect a phone to that access point, open `http://192.168.4.1`, select a scanned network, and enter its password. The ESP32 stores credentials in NVS and restarts to connect.
+- To change a saved network, open the Account screen and hold MODE for 5 seconds. On other screens, holding MODE for 5 seconds still enters deep sleep.
+- Wi-Fi credentials are stored locally in ESP32 Preferences/NVS; they are no longer compiled into `config.h`.
+- The PlatformIO environment uses the project's 4 MB partition table with two approximately 1.94 MB app slots so the firmware and future OTA-capable layout fit.
 
 Do not commit `src/config.h`; it contains Wi-Fi and device credentials. The root `.gitignore` excludes it.
 

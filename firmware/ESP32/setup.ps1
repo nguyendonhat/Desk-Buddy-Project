@@ -34,8 +34,6 @@ if (-not (Test-Path -LiteralPath $configPath)) {
   }
   if (-not $BuildOnly) {
     Write-Host 'Creating a local src\config.h. These values stay on this computer and are ignored by Git.'
-  $wifiSsid = Read-RequiredValue 'Wi-Fi name (SSID)'
-  $wifiPassword = Read-RequiredValue 'Wi-Fi password'
   $apiBaseUrl = Read-RequiredValue 'Worker base URL, for example https://example.workers.dev'
   $webAppUrl = Read-RequiredValue 'Web app URL, for example https://example.pages.dev'
   $deviceId = Read-RequiredValue 'Device ID' 'DB001'
@@ -50,8 +48,6 @@ if (-not (Test-Path -LiteralPath $configPath)) {
   $configText = @"
 #pragma once
 #include <pgmspace.h>
-#define WIFI_SSID "$(ConvertTo-CppString $wifiSsid)"
-#define WIFI_PASSWORD "$(ConvertTo-CppString $wifiPassword)"
 #define API_BASE_URL "$(ConvertTo-CppString $apiBaseUrl)"
 #define WEB_APP_URL "$(ConvertTo-CppString $webAppUrl)"
 #define DEVICE_ID "$(ConvertTo-CppString $deviceId)"

@@ -67,6 +67,12 @@ Khi mất Wi-Fi:
 * RGB LED và buzzer vẫn hoạt động.
 * Thiết bị không được treo vì đang chờ Wi-Fi.
 
+### 3.5.1. Cấu hình Wi-Fi
+
+* Khi chưa có thông tin mạng hoặc mạng đã lưu không kết nối được, ESP32 phát access point tạm có mật khẩu ngẫu nhiên hiển thị trên e-paper.
+* Người dùng mở trang cấu hình cục bộ, chọn SSID và nhập mật khẩu; ESP32 lưu cấu hình trong NVS.
+* Có thể mở lại cấu hình từ màn hình Tài khoản để đổi mạng.
+
 ### 3.6. Màn hình và nút bấm
 
 * E-paper là màn hình chính cho lịch, ghi chú trong mô tả event, và Pomodoro.

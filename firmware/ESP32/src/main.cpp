@@ -12,7 +12,6 @@
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <Wire.h>
-#include <esp_sleep.h>
 
 #include "config.h"
 #include "calendar_logic.h"
@@ -38,6 +37,11 @@ constexpr int BUTTON_OK = 35; // Input-only; requires an external 10 kOhm pull-u
 constexpr uint32_t CALENDAR_REFRESH_MS = 5UL * 60UL * 1000UL;
 constexpr uint32_t WIFI_RETRY_MS = 10UL * 1000UL;
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 12000UL;
+constexpr uint32_t EVENT_NOTE_FLIP_MS = 3000UL;
+constexpr uint32_t NOTE_IDLE_RESET_MS = 10000UL;
+constexpr uint32_t BUZZER_DOUBLE_PULSE_MS = 1000UL;
+constexpr uint32_t BUZZER_GAP_MS = 300UL;
+constexpr uint32_t BUZZER_FINISH_MS = 3000UL;
 constexpr size_t MAX_EVENTS = 8;
 constexpr long REMINDER_WINDOW_SECONDS = 15L * 60L;
 
@@ -66,11 +70,22 @@ bool calendarLoaded = false;
 bool reminderActive = false;
 deskbuddy::NavigationState navigation;
 uint32_t lastButtonAt = 0;
-uint32_t modePressedAt = 0;
 bool previousButtonsHigh[4] = {true, true, true, true};
 uint32_t pomodoroDeadlineMs = 0;
-uint32_t pomodoroRemainingSeconds = 25UL * 60UL;
-bool pomodoroHasStarted = false;
+uint8_t pomodoroCycles = 4;
+uint8_t pomodoroCyclesRemaining = 0;
+uint8_t pomodoroBreakMinutes = 5;
+uint8_t pomodoroSetupStep = 0; // cycles, work duration, break duration
+bool pomodoroOnBreak = false;
+uint32_t lastPomodoroDisplayMinute = UINT32_MAX;
+uint8_t buzzerPulsesRemaining = 0;
+bool buzzerSignalActive = false;
+bool buzzerSignalOn = false;
+bool buzzerContinuous = false;
+uint32_t buzzerSignalDeadline = 0;
+bool showingEventNote = false;
+uint32_t lastEventNoteFlip = 0;
+uint32_t lastNoteInteraction = 0;
 Preferences uiPreferences;
 Preferences wifiPreferences;
 WebServer wifiConfigServer(80);
@@ -80,12 +95,19 @@ String wifiApName;
 String wifiApPassword;
 bool noteStateDirty = false;
 uint32_t noteStateChangedAt = 0;
+bool restoreWeekDay = false;
+
+void drawCalendar();
 
 void loadNoteState() {
   if (!uiPreferences.begin("deskbuddy", false)) return;
   if (uiPreferences.getBool("noteSaved", false)) {
     navigation.screen = deskbuddy::Screen::Note;
-    navigation.dayOffset = uiPreferences.getUChar("noteDay", 0) > 1 ? 0 : uiPreferences.getUChar("noteDay", 0);
+    const uint8_t savedWeekDay = uiPreferences.getUChar("weekDay", 255);
+    if (savedWeekDay < 7) {
+      navigation.dayOffset = savedWeekDay;
+      restoreWeekDay = true;
+    }
     navigation.eventIndex = uiPreferences.getUChar("noteEvent", 0);
     navigation.notePage = uiPreferences.getUChar("notePage", 0);
   }
@@ -99,7 +121,7 @@ void queueNoteStateSave() {
 void saveNoteStateIfIdle(uint32_t now) {
   if (!noteStateDirty || static_cast<uint32_t>(now - noteStateChangedAt) < 800) return;
   uiPreferences.putBool("noteSaved", true);
-  uiPreferences.putUChar("noteDay", navigation.dayOffset);
+  uiPreferences.putUChar("weekDay", navigation.dayOffset);
   uiPreferences.putUChar("noteEvent", navigation.eventIndex);
   uiPreferences.putUChar("notePage", navigation.notePage);
   noteStateDirty = false;
@@ -115,10 +137,30 @@ int64_t eventLocalDay(const CalendarEvent& event) {
   return -1;
 }
 
+int64_t weekMondayEpochDay() {
+  if (!rtcReady) return 0;
+  const DateTime now = rtc.now();
+  const int64_t today = deskbuddy::daysFromCivil(now.year(), now.month(), now.day());
+  const int mondayOffset = (now.dayOfTheWeek() + 6) % 7; // RTClib: Sunday = 0.
+  return today - mondayOffset;
+}
+
+int64_t selectedCalendarEpochDay() {
+  return weekMondayEpochDay() + navigation.dayOffset;
+}
+
+int selectedDayEventCount() {
+  const int64_t selectedDay = selectedCalendarEpochDay();
+  int count = 0;
+  for (size_t i = 0; i < eventCount; ++i) {
+    if (eventLocalDay(events[i]) == selectedDay) ++count;
+  }
+  return count;
+}
+
 int selectedEventArrayIndex() {
   if (!rtcReady || eventCount == 0) return -1;
-  const DateTime now = rtc.now();
-  const int64_t target = deskbuddy::daysFromCivil(now.year(), now.month(), now.day()) + navigation.dayOffset;
+  const int64_t target = selectedCalendarEpochDay();
   uint8_t ordinal = 0;
   for (size_t i = 0; i < eventCount; ++i) {
     if (eventLocalDay(events[i]) != target) continue;
@@ -128,31 +170,18 @@ int selectedEventArrayIndex() {
 }
 
 void moveCalendarCursor(int direction) {
-  if (!rtcReady) return;
-  const DateTime now = rtc.now();
-  const int64_t today = deskbuddy::daysFromCivil(now.year(), now.month(), now.day());
-  int counts[2] = {0, 0};
-  for (size_t i = 0; i < eventCount; ++i) {
-    const int64_t day = eventLocalDay(events[i]);
-    if (day == today) ++counts[0]; else if (day == today + 1) ++counts[1];
-  }
-  const int current = navigation.dayOffset;
-  const int count = counts[current];
-  if (count == 0) { navigation.dayOffset = current == 0 ? 1 : 0; navigation.eventIndex = 0; }
-  else if (direction > 0 && navigation.eventIndex + 1 < count) ++navigation.eventIndex;
-  else if (direction < 0 && navigation.eventIndex > 0) --navigation.eventIndex;
-  else { navigation.dayOffset = current == 0 ? 1 : 0; navigation.eventIndex = direction > 0 ? 0 : (counts[navigation.dayOffset] ? counts[navigation.dayOffset] - 1 : 0); }
+  navigation.dayOffset = static_cast<uint8_t>((navigation.dayOffset + 7 + direction) % 7);
+  navigation.eventIndex = 0;
   navigation.notePage = 0;
 }
 
 void moveNoteCursor(int direction) {
-  const int index = selectedEventArrayIndex();
-  if (index < 0) { moveCalendarCursor(direction); return; }
-  const size_t descriptionLength = events[index].description.length();
-  const uint8_t pages = descriptionLength ? (descriptionLength + 83) / 84 : 1;
-  if (direction > 0 && navigation.notePage + 1 < pages) ++navigation.notePage;
-  else if (direction < 0 && navigation.notePage > 0) --navigation.notePage;
-  else moveCalendarCursor(direction);
+  const int count = selectedDayEventCount();
+  if (count == 0) return;
+  navigation.eventIndex = static_cast<uint8_t>((navigation.eventIndex + count + direction) % count);
+  navigation.notePage = 0;
+  showingEventNote = false;
+  lastEventNoteFlip = millis();
 }
 
 String urlEncode(const String& value) {
@@ -313,6 +342,94 @@ bool connectSavedWifi() {
   return false;
 }
 
+void stopPomodoroBuzzer() {
+  buzzerSignalActive = false;
+  buzzerSignalOn = false;
+  buzzerContinuous = false;
+  buzzerPulsesRemaining = 0;
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+void startBreakBuzzer(uint32_t now) {
+  buzzerSignalActive = true;
+  buzzerSignalOn = true;
+  buzzerContinuous = false;
+  buzzerPulsesRemaining = 2;
+  buzzerSignalDeadline = now + BUZZER_DOUBLE_PULSE_MS;
+  digitalWrite(BUZZER_PIN, HIGH);
+}
+
+void startFinishedBuzzer(uint32_t now) {
+  buzzerSignalActive = true;
+  buzzerSignalOn = true;
+  buzzerContinuous = true;
+  buzzerPulsesRemaining = 0;
+  buzzerSignalDeadline = now + BUZZER_FINISH_MS;
+  digitalWrite(BUZZER_PIN, HIGH);
+}
+
+void updatePomodoroBuzzer(uint32_t now) {
+  if (!buzzerSignalActive || static_cast<int32_t>(now - buzzerSignalDeadline) < 0) return;
+  if (buzzerContinuous) {
+    stopPomodoroBuzzer();
+  } else if (buzzerSignalOn) {
+    digitalWrite(BUZZER_PIN, LOW);
+    buzzerSignalOn = false;
+    if (buzzerPulsesRemaining > 0) --buzzerPulsesRemaining;
+    if (buzzerPulsesRemaining == 0) buzzerSignalActive = false;
+    else buzzerSignalDeadline = now + BUZZER_GAP_MS;
+  } else {
+    digitalWrite(BUZZER_PIN, HIGH);
+    buzzerSignalOn = true;
+    buzzerSignalDeadline = now + BUZZER_DOUBLE_PULSE_MS;
+  }
+}
+
+void startPomodoro(uint32_t now) {
+  navigation.pomodoroRunning = true;
+  pomodoroCyclesRemaining = pomodoroCycles;
+  pomodoroOnBreak = false;
+  pomodoroDeadlineMs = now + static_cast<uint32_t>(navigation.pomodoroMinutes) * 60000UL;
+  lastPomodoroDisplayMinute = UINT32_MAX;
+}
+
+void finishPomodoro(uint32_t now) {
+  navigation.pomodoroRunning = false;
+  pomodoroCyclesRemaining = 0;
+  pomodoroOnBreak = false;
+  pomodoroSetupStep = 0;
+  navigation.screen = deskbuddy::Screen::Pomodoro;
+  startFinishedBuzzer(now);
+  drawCalendar();
+}
+
+void updatePomodoro(uint32_t now) {
+  updatePomodoroBuzzer(now);
+  if (!navigation.pomodoroRunning || static_cast<int32_t>(now - pomodoroDeadlineMs) < 0) return;
+  if (!pomodoroOnBreak) {
+    if (pomodoroCyclesRemaining <= 1) {
+      finishPomodoro(now);
+      return;
+    }
+    pomodoroOnBreak = true;
+    pomodoroDeadlineMs = now + static_cast<uint32_t>(pomodoroBreakMinutes) * 60000UL;
+    startBreakBuzzer(now);
+  } else {
+    if (pomodoroCyclesRemaining > 0) --pomodoroCyclesRemaining;
+    pomodoroOnBreak = false;
+    pomodoroDeadlineMs = now + static_cast<uint32_t>(navigation.pomodoroMinutes) * 60000UL;
+  }
+  if (navigation.screen == deskbuddy::Screen::Pomodoro) {
+    const uint32_t remainingMs = static_cast<int32_t>(pomodoroDeadlineMs - now) > 0
+      ? pomodoroDeadlineMs - now : 0;
+    const uint32_t displayMinute = (remainingMs + 59999UL) / 60000UL;
+    if (displayMinute != lastPomodoroDisplayMinute) {
+      lastPomodoroDisplayMinute = displayMinute;
+      drawCalendar();
+    }
+  }
+}
+
 void drawCalendar() {
   epaper.setRotation(1); // Landscape: 296 x 128.
   epaper.setFullWindow();
@@ -328,7 +445,7 @@ void drawCalendar() {
     epaperText.setFont(u8g2_font_unifont_t_vietnamese2);
     epaperText.setCursor(8, 18);
     switch (navigation.screen) {
-      case deskbuddy::Screen::Calendar: epaperText.print(navigation.dayOffset ? "Lich - Ngay mai" : "Lich - Hom nay"); break;
+      case deskbuddy::Screen::Calendar: epaperText.print("Lich tuan"); break;
       case deskbuddy::Screen::Note: epaperText.print("Ghi chu su kien"); break;
       case deskbuddy::Screen::Pomodoro: epaperText.print("Pomodoro"); break;
       case deskbuddy::Screen::Account: epaperText.print("Tai khoan Google"); break;
@@ -336,9 +453,27 @@ void drawCalendar() {
     epaper.drawLine(6, 23, epaper.width() - 6, 23, GxEPD_BLACK);
 
     if (navigation.screen == deskbuddy::Screen::Pomodoro) {
-      epaperText.setCursor(12, 58); epaperText.print(navigation.pomodoroRunning ? "Dang tap trung" : "San sang tap trung");
-      epaperText.setCursor(12, 84); epaperText.print("Thoi luong: "); epaperText.print(navigation.pomodoroMinutes); epaperText.print(" phut");
-      epaperText.setCursor(12, 108); epaperText.print("OK: bat/tam dung UP/DOWN: chinh");
+      if (navigation.pomodoroRunning) {
+        const uint32_t remainingMs = static_cast<int32_t>(pomodoroDeadlineMs - millis()) > 0
+          ? pomodoroDeadlineMs - millis() : 0;
+        const uint32_t remainingSeconds = (remainingMs + 999UL) / 1000UL;
+        char countdown[12];
+        snprintf(countdown, sizeof(countdown), "%02lu:%02lu",
+                 static_cast<unsigned long>(remainingSeconds / 60UL),
+                 static_cast<unsigned long>(remainingSeconds % 60UL));
+        epaperText.setCursor(12, 49); epaperText.print("Chu ky con: "); epaperText.print(pomodoroCyclesRemaining);
+        epaperText.setCursor(12, 72); epaperText.print(pomodoroOnBreak ? "Thoi gian nghi" : "Thoi gian lam");
+        epaperText.setCursor(12, 105); epaperText.print(countdown);
+        epaperText.setCursor(132, 105); epaperText.print("MODE: doi che do");
+      } else {
+        epaperText.setCursor(12, 47); epaperText.print(pomodoroSetupStep == 0 ? "> Chu ky: " : "  Chu ky: ");
+        epaperText.print(pomodoroCycles);
+        epaperText.setCursor(12, 70); epaperText.print(pomodoroSetupStep == 1 ? "> Lam viec: " : "  Lam viec: ");
+        epaperText.print(navigation.pomodoroMinutes); epaperText.print(" phut");
+        epaperText.setCursor(12, 93); epaperText.print(pomodoroSetupStep == 2 ? "> Nghi: " : "  Nghi: ");
+        epaperText.print(pomodoroBreakMinutes); epaperText.print(" phut");
+        epaperText.setCursor(12, 118); epaperText.print("UP/DOWN sua  OK tiep/bat dau");
+      }
     } else if (navigation.screen == deskbuddy::Screen::Account) {
       String link = String(WEB_APP_URL);
       link += link.indexOf('?') >= 0 ? '&' : '?';
@@ -360,52 +495,93 @@ void drawCalendar() {
         epaperText.setCursor(132, 48); epaperText.print("Quet QR bang dien thoai");
         epaperText.setCursor(132, 68); epaperText.print("Chon tai khoan Google");
         epaperText.setCursor(132, 88); epaperText.print("de cap quyen doc lich");
-        epaperText.setCursor(132, 112); epaperText.print("Thiet bi: "); epaperText.print(DEVICE_ID);
+        epaperText.setCursor(132, 112); epaperText.print("OK: cai dat Wi-Fi");
       } else {
         epaperText.setCursor(132, 52); epaperText.print("Khong tao duoc QR");
         epaperText.setCursor(132, 76); epaperText.print("Kiem tra WEB_APP_URL");
         epaperText.setCursor(132, 100); epaperText.print("URL can ngan hon");
+        epaperText.setCursor(132, 118); epaperText.print("OK: cai dat Wi-Fi");
+      }
+    } else if (navigation.screen == deskbuddy::Screen::Calendar) {
+      static const char* weekdayLabels[7] = {"T2", "T3", "T4", "T5", "T6", "T7", "CN"};
+      int weekYear;
+      unsigned weekMonth, weekDate;
+      const int64_t monday = weekMondayEpochDay();
+      deskbuddy::civilFromDays(monday, weekYear, weekMonth, weekDate);
+      char header[32];
+      snprintf(header, sizeof(header), "Tuan %02u/%02u - %02u/%02u",
+               weekDate, weekMonth,
+               static_cast<unsigned>(weekDate + 6 > deskbuddy::daysInMonth(weekYear, static_cast<int>(weekMonth))
+                 ? weekDate + 6 - deskbuddy::daysInMonth(weekYear, static_cast<int>(weekMonth))
+                 : weekDate + 6),
+               static_cast<unsigned>(weekDate + 6 > deskbuddy::daysInMonth(weekYear, static_cast<int>(weekMonth))
+                 ? (weekMonth == 12 ? 1 : weekMonth + 1) : weekMonth));
+      epaperText.setCursor(112, 18); epaperText.print(header);
+      for (uint8_t day = 0; day < 7; ++day) {
+        const int x = 7 + day * 40;
+        const int64_t dateEpoch = monday + day;
+        int year; unsigned month, date;
+        deskbuddy::civilFromDays(dateEpoch, year, month, date);
+        uint8_t eventCountForDay = 0;
+        for (size_t i = 0; i < eventCount; ++i) if (eventLocalDay(events[i]) == dateEpoch) ++eventCountForDay;
+        if (day == navigation.dayOffset) {
+          epaper.fillRect(x, 30, 39, 70, GxEPD_BLACK);
+          epaperText.setForegroundColor(GxEPD_WHITE);
+          epaperText.setBackgroundColor(GxEPD_BLACK);
+        } else {
+          epaper.drawRect(x, 30, 39, 70, GxEPD_BLACK);
+          epaperText.setForegroundColor(GxEPD_BLACK);
+          epaperText.setBackgroundColor(GxEPD_WHITE);
+        }
+        epaperText.setCursor(x + 5, 49); epaperText.print(weekdayLabels[day]);
+        epaperText.setCursor(x + 7, 73); epaperText.print(date);
+        epaperText.setCursor(x + 5, 92);
+        if (eventCountForDay) { epaperText.print(eventCountForDay); epaperText.print(" SK"); }
+        else epaperText.print("-");
+      }
+      epaperText.setForegroundColor(GxEPD_BLACK);
+      epaperText.setBackgroundColor(GxEPD_WHITE);
+      epaperText.setCursor(8, 119); epaperText.print("UP/DOWN: ngay  OK: xem");
+      if (!calendarLoaded) {
+        epaperText.setCursor(190, 119); epaperText.print(WiFi.status() == WL_CONNECTED ? "Tai..." : "Offline");
       }
     } else if (!calendarLoaded) {
-      epaperText.setCursor(8, 50);
-      epaperText.print(WiFi.status() == WL_CONNECTED ? "Dang tai lich..." : "Mat Wi-Fi - giu lich cu");
+      epaperText.setCursor(8, 56);
+      epaperText.print(WiFi.status() == WL_CONNECTED ? "Dang tai lich..." : "Chua co du lieu lich");
+      epaperText.setCursor(8, 119); epaperText.print("OK: ve lich tuan");
     } else {
       const int selected = selectedEventArrayIndex();
       if (selected < 0) {
-        epaperText.setCursor(8, 56); epaperText.print("Khong co su kien trong ngay");
-      } else if (navigation.screen == deskbuddy::Screen::Calendar) {
-        String timeLabel = "Ca ngay";
-        if (events[selected].start.length() >= 11 && events[selected].start[10] == 'T') {
-          char localTime[6] = "--:--";
-          int hour = 0, minute = 0;
-          if (deskbuddy::parseEventLocalClock(std::string(events[selected].start.c_str()),
-                                              LOCAL_UTC_OFFSET_SECONDS, hour, minute)) {
-            snprintf(localTime, sizeof(localTime), "%02d:%02d", hour, minute);
+        epaperText.setCursor(8, 60); epaperText.print("Ngay nay khong co su kien");
+        epaperText.setCursor(8, 119); epaperText.print("OK: ve lich tuan");
+      } else {
+        int year; unsigned month, date;
+        deskbuddy::civilFromDays(selectedCalendarEpochDay(), year, month, date);
+        char noteHeader[32];
+        snprintf(noteHeader, sizeof(noteHeader), "%02u/%02u  SU KIEN %u/%u",
+                 date, month, navigation.eventIndex + 1, selectedDayEventCount());
+        epaperText.setCursor(8, 41); epaperText.print(noteHeader);
+        if (showingEventNote) {
+          const String description = events[selected].description;
+          if (!description.length()) {
+            epaperText.setCursor(8, 75); epaperText.print("Khong co ghi chu");
+          } else {
+            epaperText.setCursor(8, 61); epaperText.print("GHI CHU");
+            const size_t offset = static_cast<size_t>(navigation.notePage) * 84;
+            for (int line = 0; line < 3; ++line) {
+              const size_t start = offset + line * 28;
+              if (start >= description.length()) break;
+              epaperText.setCursor(8, 79 + line * 16);
+              epaperText.print(description.substring(start, start + 28));
+            }
+            const size_t totalPages = (description.length() + 83) / 84;
+            epaperText.setCursor(8, 119); epaperText.print("Trang "); epaperText.print(navigation.notePage + 1);
+            epaperText.print("/"); epaperText.print(totalPages);
           }
-          timeLabel = localTime;
+        } else {
+          epaperText.setCursor(8, 79); epaperText.print(events[selected].title.substring(0, 34));
         }
-        epaperText.setCursor(8, 52); epaperText.print(timeLabel); epaperText.print(" ");
-        epaperText.print(events[selected].title.substring(0, 27));
-        epaperText.setCursor(8, 82); epaperText.print("Su kien "); epaperText.print(navigation.eventIndex + 1);
-        epaperText.setCursor(8, 108); epaperText.print("OK: xem ghi chu");
-      } else {
-        epaperText.setCursor(8, 39); epaperText.print(events[selected].title.substring(0, 30));
-        const String description = events[selected].description;
-        const size_t offset = static_cast<size_t>(navigation.notePage) * 84;
-        for (int line = 0; line < 3; ++line) {
-          const size_t start = offset + line * 28;
-          if (start >= description.length()) break;
-          epaperText.setCursor(8, 62 + line * 19);
-          epaperText.print(description.substring(start, start + 28));
-        }
-        const size_t totalPages = description.length() ? (description.length() + 83) / 84 : 1;
-        epaperText.setCursor(8, 122); epaperText.print("Trang "); epaperText.print(navigation.notePage + 1);
-        epaperText.print("/"); epaperText.print(totalPages);
-      }
-      if (navigation.screen == deskbuddy::Screen::Calendar) {
-        epaperText.setCursor(8, 122); epaperText.print("UP/DOWN: su kien  OK: note");
-      } else {
-        epaperText.setCursor(80, 122); epaperText.print("UP/DOWN: cuon; OK: ve");
+        epaperText.setCursor(146, 119); epaperText.print("UP/DOWN doi  OK: lich");
       }
     }
   } while (epaper.nextPage());
@@ -424,9 +600,11 @@ void checkReminder() {
       if (deskbuddy::shouldBeepForEvent(std::string(events[i].start.c_str()), std::string(lastReminderKey.c_str()))) {
         lastReminderKey = events[i].start;
         setStatusLed(true, false, false);
-        digitalWrite(BUZZER_PIN, HIGH);
-        delay(250);
-        digitalWrite(BUZZER_PIN, LOW);
+        if (!buzzerSignalActive) {
+          digitalWrite(BUZZER_PIN, HIGH);
+          delay(250);
+          digitalWrite(BUZZER_PIN, LOW);
+        }
       }
     }
   }
@@ -505,10 +683,18 @@ void updateLcd() {
   char second[17];
   snprintf(first, sizeof(first), "%02d/%02d/%04d", now.day(), now.month(), now.year());
   if (navigation.screen == deskbuddy::Screen::Pomodoro) {
-    uint32_t remaining = navigation.pomodoroRunning && static_cast<int32_t>(pomodoroDeadlineMs - millis()) > 0
-      ? (pomodoroDeadlineMs - millis()) / 1000UL : pomodoroRemainingSeconds;
-    snprintf(second, sizeof(second), "Pomo %02lu:%02lu", static_cast<unsigned long>(remaining / 60),
-             static_cast<unsigned long>(remaining % 60));
+    if (navigation.pomodoroRunning) {
+      const uint32_t remainingMs = static_cast<int32_t>(pomodoroDeadlineMs - millis()) > 0
+        ? pomodoroDeadlineMs - millis() : 0;
+      const uint32_t remainingSeconds = (remainingMs + 999UL) / 1000UL;
+      snprintf(second, sizeof(second), "%c%02lu:%02lu C%u/%u", pomodoroOnBreak ? 'R' : 'W',
+               static_cast<unsigned long>(remainingSeconds / 60UL),
+               static_cast<unsigned long>(remainingSeconds % 60UL),
+               pomodoroCyclesRemaining, pomodoroCycles);
+    } else {
+      snprintf(second, sizeof(second), "C%u W%u B%u", pomodoroCycles,
+               static_cast<unsigned>(navigation.pomodoroMinutes), pomodoroBreakMinutes);
+    }
   } else if (WiFi.status() == WL_CONNECTED) {
     snprintf(second, sizeof(second), "%02d:%02d:%02d Online", now.hour(), now.minute(), now.second());
   } else {
@@ -544,6 +730,10 @@ void setup() {
   showLcdMessage("Desk Buddy", "Dang khoi dong");
 
   rtcReady = rtc.begin();
+  if (rtcReady && !restoreWeekDay) {
+    const DateTime now = rtc.now();
+    navigation.dayOffset = static_cast<uint8_t>((now.dayOfTheWeek() + 6) % 7);
+  }
   if (rtcReady && rtc.lostPower()) {
     showLcdMessage("RTC mat gio", "Dang cho Wi-Fi");
   }
@@ -560,28 +750,9 @@ void setup() {
   lastCalendarFetch = millis();
 }
 
-void enterSleepMode() {
-  epaper.hibernate();
-  lcd.noBacklight();
-  showLcdMessage("Desk Buddy", "Tam ngu");
-  lcd.noBacklight();
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_32, 0);
-  esp_deep_sleep_start();
-}
-
 void loop() {
   connectWifi();
   const uint32_t now = millis();
-  if (digitalRead(BUTTON_MODE) == LOW) {
-    if (modePressedAt == 0) modePressedAt = now;
-    if (now - modePressedAt >= 5000) {
-      modePressedAt = now;
-      if (navigation.screen == deskbuddy::Screen::Account) startWifiSetup();
-      else enterSleepMode();
-    }
-  } else {
-    modePressedAt = 0;
-  }
   const int buttonPins[4] = {BUTTON_MODE, BUTTON_UP, BUTTON_DOWN, BUTTON_OK};
   bool buttonPressed[4] = {false, false, false, false};
   for (int i = 0; i < 4; ++i) {
@@ -591,36 +762,94 @@ void loop() {
   }
   if (now - lastButtonAt > 60) {
     bool changed = false;
-    if (buttonPressed[0]) { deskbuddy::nextScreen(navigation); changed = true; }
-    else if (buttonPressed[1]) { if (navigation.screen == deskbuddy::Screen::Pomodoro) { deskbuddy::scrollUp(navigation); if (!pomodoroHasStarted) pomodoroRemainingSeconds = navigation.pomodoroMinutes * 60UL; } else if (navigation.screen == deskbuddy::Screen::Note) moveNoteCursor(-1); else moveCalendarCursor(-1); changed = true; }
-    else if (buttonPressed[2]) { if (navigation.screen == deskbuddy::Screen::Pomodoro) { deskbuddy::scrollDown(navigation); if (!pomodoroHasStarted) pomodoroRemainingSeconds = navigation.pomodoroMinutes * 60UL; } else if (navigation.screen == deskbuddy::Screen::Note) moveNoteCursor(1); else moveCalendarCursor(1); changed = true; }
-    else if (buttonPressed[3]) {
-      if (navigation.screen == deskbuddy::Screen::Pomodoro) {
-        if (navigation.pomodoroRunning) {
-          const int32_t left = static_cast<int32_t>(pomodoroDeadlineMs - now);
-          pomodoroRemainingSeconds = left > 0 ? static_cast<uint32_t>(left / 1000) : 0;
-        } else {
-          if (!pomodoroHasStarted) pomodoroRemainingSeconds = static_cast<uint32_t>(navigation.pomodoroMinutes) * 60UL;
-          pomodoroDeadlineMs = now + pomodoroRemainingSeconds * 1000UL;
-          pomodoroHasStarted = true;
-        }
+    if (buttonPressed[0]) {
+      deskbuddy::nextScreen(navigation);
+      if (navigation.screen == deskbuddy::Screen::Note) {
+        lastNoteInteraction = now;
+        lastEventNoteFlip = now;
+        showingEventNote = false;
       }
-      deskbuddy::confirm(navigation); changed = true;
+      changed = true;
+    }
+    else if (buttonPressed[1] || buttonPressed[2]) {
+      const int direction = buttonPressed[1] ? -1 : 1;
+      if (navigation.screen == deskbuddy::Screen::Pomodoro && !navigation.pomodoroRunning) {
+        if (pomodoroSetupStep == 0) {
+          if (direction < 0 && pomodoroCycles < 12) ++pomodoroCycles;
+          else if (direction > 0 && pomodoroCycles > 1) --pomodoroCycles;
+        } else if (pomodoroSetupStep == 1) {
+          if (direction < 0 && navigation.pomodoroMinutes < 120) navigation.pomodoroMinutes += 10;
+          else if (direction > 0 && navigation.pomodoroMinutes > 10) navigation.pomodoroMinutes -= 10;
+        } else {
+          if (direction < 0 && pomodoroBreakMinutes < 60) pomodoroBreakMinutes += 5;
+          else if (direction > 0 && pomodoroBreakMinutes > 5) pomodoroBreakMinutes -= 5;
+        }
+        changed = true;
+      } else if (navigation.screen == deskbuddy::Screen::Note) {
+        moveNoteCursor(direction);
+        lastNoteInteraction = now;
+        changed = true;
+      } else if (navigation.screen == deskbuddy::Screen::Calendar) {
+        moveCalendarCursor(direction);
+        changed = true;
+      }
+    }
+    else if (buttonPressed[3]) {
+      if (navigation.screen == deskbuddy::Screen::Account) {
+        startWifiSetup();
+      } else if (navigation.screen == deskbuddy::Screen::Pomodoro) {
+        if (!navigation.pomodoroRunning) {
+          if (pomodoroSetupStep < 2) {
+            ++pomodoroSetupStep;
+          } else {
+            startPomodoro(now);
+          }
+          changed = true;
+        }
+      } else if (navigation.screen == deskbuddy::Screen::Calendar) {
+        navigation.eventIndex = 0;
+        navigation.notePage = 0;
+        showingEventNote = false;
+        lastNoteInteraction = now;
+        lastEventNoteFlip = now;
+        deskbuddy::confirm(navigation);
+        changed = true;
+      } else if (navigation.screen == deskbuddy::Screen::Note) {
+        deskbuddy::confirm(navigation);
+        showingEventNote = false;
+        changed = true;
+      }
     }
     if (changed) { lastButtonAt = now; queueNoteStateSave(); drawCalendar(); }
   }
 
   saveNoteStateIfIdle(now);
 
-  if (now - lastLcdUpdate >= 1000) {
-    lastLcdUpdate = now;
-    if (navigation.pomodoroRunning && static_cast<int32_t>(pomodoroDeadlineMs - now) <= 0) {
-      navigation.pomodoroRunning = false;
-      pomodoroRemainingSeconds = 0;
-      pomodoroHasStarted = false;
-      digitalWrite(BUZZER_PIN, HIGH); delay(300); digitalWrite(BUZZER_PIN, LOW);
+  if (navigation.screen == deskbuddy::Screen::Note) {
+    if (static_cast<uint32_t>(now - lastNoteInteraction) >= NOTE_IDLE_RESET_MS) {
+      navigation.screen = deskbuddy::Screen::Calendar;
+      showingEventNote = false;
+      navigation.eventIndex = 0;
+      queueNoteStateSave();
+      drawCalendar();
+    } else if (selectedEventArrayIndex() >= 0 && static_cast<uint32_t>(now - lastEventNoteFlip) >= EVENT_NOTE_FLIP_MS) {
+      lastEventNoteFlip = now;
+      const int selected = selectedEventArrayIndex();
+      if (selected >= 0 && showingEventNote) {
+        const size_t totalPages = events[selected].description.length()
+          ? (events[selected].description.length() + 83) / 84 : 1;
+        navigation.notePage = static_cast<uint8_t>((navigation.notePage + 1) % totalPages);
+        queueNoteStateSave();
+      }
+      showingEventNote = !showingEventNote;
       drawCalendar();
     }
+  }
+
+  updatePomodoro(now);
+
+  if (now - lastLcdUpdate >= 1000) {
+    lastLcdUpdate = now;
     updateLcd();
   }
   if (now - lastCalendarFetch >= CALENDAR_REFRESH_MS) {

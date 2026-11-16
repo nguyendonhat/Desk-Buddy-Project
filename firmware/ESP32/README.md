@@ -14,9 +14,11 @@ This first firmware increment connects a NodeMCU-32S to Wi-Fi, reads the DS3231,
 ## Buttons and display pages
 
 - MODE cycles Calendar, Notes, Pomodoro, and Google-account setup.
-- Tap MODE to change page; hold it for 5 seconds to put the ESP32 into deep sleep, then tap it to wake.
-- UP/DOWN switch between today and tomorrow in calendar views and adjust Pomodoro length between 1 and 60 minutes.
-- OK toggles the event/note view or starts/pauses the Pomodoro session.
+- Tap MODE to change page. MODE always changes the current screen; there is no sleep gesture.
+- Calendar shows Monday through Sunday. UP/DOWN selects a weekday; OK opens that day's events and notes. In Notes, UP/DOWN switches events, title and description alternate every three seconds, and OK returns to the week view. Ten seconds idle also returns to the week view.
+- Pomodoro setup uses UP/DOWN to adjust cycles (1–12), work duration (10–120 minutes in 10-minute steps), and break duration (5–60 minutes in 5-minute steps). OK confirms each setting and starts the timer after the third confirmation. Work/break timing continues while MODE switches screens.
+- At a work-to-break transition the buzzer sounds twice for about one second per pulse; when all cycles finish it sounds for about three seconds and returns to Pomodoro setup.
+- On Account, OK opens the Wi-Fi setup access point. MODE changes screens in every mode.
 - Wire MODE/UP/DOWN from GPIO32/33/19 to GND. Wire OK from GPIO35 to GND and add an external 10 kΩ pull-up to 3.3 V because GPIO35 has no internal pull-up.
 - The Account page draws a QR linking to `WEB_APP_URL?device_id=...`. Set `WEB_APP_URL` in local `src/config.h` to the deployed Desk Buddy web app. Keep the base URL short (no query string) so it fits the version-8 QR. The QR contains only the public web URL and device ID; it does not contain Google credentials or tokens.
 
@@ -32,7 +34,7 @@ This first firmware increment connects a NodeMCU-32S to Wi-Fi, reads the DS3231,
 
 - On first boot, or when the saved network cannot connect, the ESP32 starts a temporary password-protected access point. The e-paper shows its network name, one-time password, and `192.168.4.1`.
 - Connect a phone to that access point, open `http://192.168.4.1`, select a scanned network, and enter its password. The ESP32 stores credentials in NVS and restarts to connect.
-- To change a saved network, open the Account screen and hold MODE for 5 seconds. On other screens, holding MODE for 5 seconds still enters deep sleep.
+- To change a saved network, open the Account screen and press OK. MODE remains the screen-switching button in every mode.
 - Wi-Fi credentials are stored locally in ESP32 Preferences/NVS; they are no longer compiled into `config.h`.
 - The PlatformIO environment uses the project's 4 MB partition table with two approximately 1.94 MB app slots so the firmware and future OTA-capable layout fit.
 
@@ -57,7 +59,7 @@ For production, the Worker cookie uses `SameSite=None; Secure` so the web app ca
 - RTC time is synchronized from NTP when Wi-Fi is available and continues from DS3231 when Wi-Fi is lost.
 - Calendar refresh runs every five minutes; the e-paper redraws only after a successful fetch.
 - Clock, calendar display, and reminders are fixed to Vietnam time (`Asia/Ho_Chi_Minh`, UTC+7). The POSIX TZ string `ICT-7` represents UTC+7.
-- Calendar rendering/sync, Pomodoro, and offline behavior must be verified again as firmware is rebuilt. Break intervals, event caching, and enclosure wiring validation are not confirmed complete.
+- Calendar week navigation, alternating event/note display, Pomodoro cycle timing, buzzer timing, and offline behavior need Wokwi/physical verification. A successful compile alone does not validate these interactions.
 
 ## Test without hardware
 

@@ -21,6 +21,7 @@ AI agents and contributors: start with [`AGENTS.md`](AGENTS.md) and [`STATUS.md`
 > **GPIO35** là input-only, không có pull-up nội bộ. Mạch thật cần điện trở **10 kΩ kéo lên 3.3 V**. Không nối 5 V vào bất kỳ GPIO ESP32 nào.
 
 Xem sơ đồ chân đầy đủ và lưu ý nguồn, level-shifter LCD tại [`HARDWARE_DESIGN.md`](HARDWARE_DESIGN.md).
+Sơ đồ lắp mạch đầy đủ, gồm điện trở LED, driver buzzer, pull-up GPIO35 và phân tách I²C 3.3/5 V: [`HARDWARE_WIRING.md`](HARDWARE_WIRING.md).
 
 ---
 
@@ -31,26 +32,47 @@ Người dùng
   → Web account-linking page (đăng nhập/chọn lịch/đăng xuất Google)
   → Cloudflare Worker (OAuth, Calendar API)
   → ESP32: hiển thị lịch/ghi chú/Pomodoro trên e-paper
-           hiển thị đồng hồ + Pomodoro countdown trên LCD
+           hiển thị ngày/giờ liên tục trên LCD từ DS3231
 ```
 
 Chi tiết tại [`ARCHITECTURE.md`](ARCHITECTURE.md) · API contract tại [`API.md`](API.md).
 
 ---
 
-## Các màn hình và điều khiển
+## Giao diện e-paper và điều khiển
 
-| Nút | Tác dụng |
+> Firmware hiện triển khai luồng điều khiển dưới đây; trải nghiệm trên Wokwi và phần cứng vẫn cần được kiểm tra riêng.
+
+### Vai trò hai màn hình
+
+- **LCD1602** chỉ hiển thị ngày, giờ, thứ liên tục. ESP32 lấy giờ từ DS3231 để LCD vẫn chạy khi mất Wi-Fi; khi có Wi-Fi, thiết bị có thể đồng bộ RTC qua NTP. Pomodoro không thay nội dung đồng hồ trên LCD.
+- **E-paper** là giao diện chính để xem NOTE, điều khiển Pomodoro, quản lý tài khoản và cài đặt ngày giờ. ESP32 cập nhật từng màn riêng; hai màn không nối trực tiếp với nhau.
+- Pomodoro chạy nền trên ESP32, nên tiếp tục đếm khi người dùng chuyển sang tab khác.
+
+### Luồng khởi động
+
+- Khi cấp nguồn hoặc đánh thức thiết bị bằng MODE, e-paper hiện Welcome.
+- Nếu chưa liên kết Google Calendar, hiện QR để mở web app và ghép tài khoản với `device_id`.
+- Nếu đã có trạng thái liên kết/dữ liệu lịch, vào NOTE. QR chỉ chứa URL công khai và mã thiết bị, không chứa token đăng nhập.
+
+### Các chế độ
+
+| Chế độ | Cách dùng dự kiến |
 |---|---|
-| **MODE** (nhấn) | Chuyển tuần tự: Lịch → Ghi chú → Pomodoro → Tài khoản |
-| **MODE** (giữ 5 s) | ESP32 vào deep sleep; nhấn MODE để thức |
-| **UP / DOWN** | Lịch: chuyển sự kiện/ngày · Ghi chú: cuộn trang · Pomodoro: chỉnh thời lượng (1–60 phút) |
-| **OK** | Lịch: mở ghi chú · Ghi chú: quay về lịch · Pomodoro: bắt đầu/tạm dừng |
+| **Calendar / NOTE** | Calendar hiển thị 7 ngày từ thứ Hai đến Chủ nhật; UP/DOWN chọn ngày, OK mở ghi chú/sự kiện của ngày đó. Trong NOTE, UP/DOWN chuyển giữa các sự kiện. E-paper luân phiên tiêu đề sự kiện và note mỗi 3 giây; nội dung dài tự chuyển trang. OK quay lại lịch tuần; sau 10 giây không thao tác cũng quay về lịch tuần. |
+| **Pomodoro** | OK lần lượt xác nhận số chu kỳ, thời gian làm việc và thời gian nghỉ rồi bắt đầu. UP/DOWN chỉnh chu kỳ từng 1 (1–12), thời gian làm việc từng 10 phút (10–120) và nghỉ từng 5 phút (5–60). Khi hết một phiên làm, buzzer kêu hai nhịp khoảng 1 giây; hoàn tất toàn bộ chu kỳ, buzzer kêu khoảng 3 giây. MODE đổi màn hình mà timer và cấu hình vẫn giữ nguyên trong lúc chạy. |
+| **Account** | Hiển thị QR để liên kết Google Calendar; OK mở điểm truy cập cấu hình Wi-Fi để chọn mạng và nhập mật khẩu. MODE đổi màn hình. |
 
-- **E-paper** hiển thị lịch, ghi chú phân trang và Pomodoro; chỉ refresh khi có thay đổi dữ liệu.
-- **LCD** luôn hiển thị ngày/giờ thực; hàng 2 chuyển sang đếm ngược Pomodoro khi đang chạy.
-- **LED đỏ + còi** báo nhắc sự kiện bắt đầu trong vòng 15 phút.
-- **Màn Tài khoản** hiển thị QR code trỏ tới web app kèm `device_id` của thiết bị. Người dùng quét QR, chọn tài khoản Google, cấp quyền đọc lịch rồi chọn calendar trên web. QR chỉ chứa URL công khai và mã thiết bị, không chứa token hay thông tin đăng nhập. Muốn đổi tài khoản: đăng xuất trên web rồi quét lại QR.
+MODE nhấn ngắn chuyển tuần tự giữa Calendar, NOTE, Pomodoro và Account. Không có chế độ ngủ.
+
+### Nội dung tiếng Việt trên e-paper
+
+E-paper/font hiện dùng có thể không vẽ được đầy đủ dấu tiếng Việt. Dữ liệu Calendar tiếng Việt vẫn được nhận và giữ nguyên; riêng chuỗi đưa lên màn hình sẽ được chuyển sang dạng **không dấu** (ví dụ `Họp nhóm` → `Hop nhom`). Nếu gặp ký tự không hỗ trợ như emoji, firmware có thể thay bằng `?` hoặc bỏ ký tự đó. Quy tắc này chỉ áp dụng cho bản hiển thị, không sửa dữ liệu trên Google Calendar.
+
+### Thiết bị báo hiệu
+
+- LED RGB và buzzer dùng để báo trạng thái Pomodoro, nhắc sự kiện và hoàn tất hẹn giờ; cần tiết chế âm báo.
+- E-paper chỉ refresh khi nội dung thay đổi, không dùng làm đồng hồ chạy từng giây.
 
 ---
 
@@ -154,7 +176,7 @@ QR cần các địa chỉ public đã deploy; địa chỉ localhost chỉ ch�
 
 ### Cấu hình Wi-Fi trên thiết bị
 
-Lần đầu khởi động (hoặc khi mạng đã lưu không kết nối được), ESP32 tạo Wi-Fi tạm có mật khẩu ngẫu nhiên hiển thị trên e-paper. Dùng điện thoại kết nối mạng `DeskBuddy-<device_id>`, mở `http://192.168.4.1`, chọn Wi-Fi nhà và nhập mật khẩu. ESP32 lưu cấu hình trong bộ nhớ nội bộ rồi khởi động lại. Muốn đổi mạng đã lưu, vào màn hình Tài khoản và giữ MODE 5 giây. Giữ MODE 5 giây ở màn hình khác vẫn đưa thiết bị vào deep sleep.
+Lần đầu khởi động (hoặc khi mạng đã lưu không kết nối được), ESP32 tạo Wi-Fi tạm có mật khẩu ngẫu nhiên hiển thị trên e-paper. Dùng điện thoại kết nối mạng `DeskBuddy-<device_id>`, mở `http://192.168.4.1`, chọn Wi-Fi nhà và nhập mật khẩu. ESP32 lưu cấu hình trong bộ nhớ nội bộ rồi khởi động lại. Muốn đổi mạng đã lưu, vào màn hình Tài khoản và nhấn OK. MODE nhấn ngắn luôn chuyển chế độ.
 
 ### TypeScript check Worker
 
@@ -219,7 +241,7 @@ Firmware dùng `GxEPD2_290_GDEY029T94`. **Trước khi nạp lên bo thật**, k
 2. Kiểm tra LCD hiển thị ngày/giờ từ DS3231.
 3. Kết nối Wi-Fi → xem Serial log đồng bộ NTP.
 4. Liên kết Google Calendar qua trang tài khoản → scan QR trên màn Tài khoản.
-5. Kiểm tra fetch lịch tự động (5 phút/lần).
+5. Kiểm tra cập nhật sự kiện theo thao tác **Update events** trên thiết bị; nhịp đồng bộ nền cần được chốt khi triển khai để cân bằng độ mới dữ liệu và năng lượng.
 
 ---
 
@@ -283,7 +305,8 @@ Test kiểm tra: parse RFC3339, tính reminder, điều hướng màn. Yêu cầ
 |---|---|
 | **Nạp firmware thật** | Cần ESP32 xuất hiện ở cổng COM (kiểm tra driver USB-serial và cáp data) |
 | **Xác nhận driver e-paper** | Xem mã trên mặt sau panel; thay driver trong `main.cpp` nếu cần |
-| **Chu kỳ nghỉ Pomodoro** | Chưa có; countdown cơ bản đã hoạt động |
+| **Pomodoro chu kỳ/làm/nghỉ** | Luồng cấu hình, timer nền và tín hiệu buzzer đã biên dịch; cần xác minh hành vi trên thiết bị |
+| **Lịch tuần và luân phiên event/note** | Đã triển khai trong production firmware; cần xác minh nút bấm và refresh e-paper |
 | **Cấu hình Wi-Fi** | Đã có; kết nối access point của ESP32, chọn mạng và nhập mật khẩu trên trang cục bộ |
 | **Ghi chú dài phân trang** | Code đã có; chưa thử trên phần cứng thật |
 | **Lưu trữ OAuth bền vững** | Worker Production đã dùng KV; Preview dùng namespace riêng |

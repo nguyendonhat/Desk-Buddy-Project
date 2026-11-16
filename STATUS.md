@@ -9,20 +9,21 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 ## Current code state
 
 - ESP32 firmware and Wokwi mock both exist under `firmware/ESP32` and `simulation/wokwi`.
-- Firmware prototype contains display-page, QR, button, note, Pomodoro, and deep-sleep code, but the team reports that the current Wokwi experience does not work as intended. Treat firmware as unfinished and rebuild/test it in small increments; prior compilation is not proof of working simulation.
+- Production firmware now has a seven-day (Monday–Sunday) calendar selector, selected-day event/note view with 3-second title/note alternation and 10-second return to the week, plus configurable Pomodoro cycles/work/break timing. Pomodoro continues while changing modes and has transition/completion buzzer signals. These new interactions compile, but Wokwi and physical behavior have not been verified. Deep sleep has been removed; MODE changes screens.
 - Button pin map in firmware/docs: MODE GPIO32, UP GPIO33, DOWN GPIO19, OK GPIO35. GPIO35 requires an external 10 kΩ pull-up to 3.3 V on real hardware.
 - Firmware display driver currently targets `GxEPD2_290_GDEY029T94`. The exact physical WeAct panel revision still needs confirmation from its rear label.
 - The Wokwi mock uses `GxEPD2_290_BS`, mock events, and virtual buttons. It is not the production firmware and does not test real Google OAuth or the physical WeAct panel.
 - Wokwi sketch now has a mock NOTE flow (month grid → selected-day events → paged note/exit) and keeps the LCD on date/time while Pomodoro runs. PlatformIO compiles the Wokwi sketch via `src/main.cpp`; build passed, but button behavior in the running simulator is not yet verified.
 - Google OAuth + Calendar code exists. Worker stores OAuth state, browser sessions, and tokens in `DESK_BUDDY_STORE`; Production and Preview use separate KV namespaces. PR #2 was merged to `main`; Production health returns `{"success":true,"service":"desk-buddy-api","environment":"production"}`. The user confirmed Google login and logout work. Huan reports Calendar events displayed on the physical ESP32; the updated Vietnam timezone display still needs a reflash and hardware check.
 - Calendar event times are now forced to Vietnam (`Asia/Ho_Chi_Minh`, UTC+7) by the Worker, web app, and ESP32 rendering. Web/Worker timezone checks and the ESP32 firmware build passed on 2026-11-16; Huan must reflash and confirm the physical display after this change.
-- ESP32 now supports Wi-Fi setup through a temporary password-protected access point and local web page. It scans for SSIDs, stores credentials in NVS, opens setup automatically if no saved network connects, and can reopen setup by holding MODE for 5 seconds on the Account screen. Firmware build passed on 2026-11-16; phone flow and hardware behavior remain unverified.
-- Weather is outside the product scope. Pomodoro break cycles are not implemented.
+- ESP32 now supports Wi-Fi setup through a temporary password-protected access point and local web page. It scans for SSIDs, stores credentials in NVS, opens setup automatically if no saved network connects, and can reopen setup by pressing OK on the Account screen. Firmware build passed after the control-flow update; phone flow and hardware behavior remain unverified.
+- Weather is outside the product scope. Pomodoro settings and break cycles are now implemented in firmware; runtime behavior still needs verification.
 
 ## Last verified checks
 
 - Rechecked on 2026-11-16: `npm run build` and `npm run test:timezone` in `web`, `npm run check` and `npm run test:timezone` in `worker/cloudflare`, and `pio run -e nodemcu-32s` passed. `pio test -e native` could not compile because `gcc`/`g++` are missing.
-- After adding Wi-Fi provisioning, `pio run -e nodemcu-32s` passed on 2026-11-16 using the new 4 MB partition table. The firmware occupies 1,337,408 bytes (65.8% of the 2,031,616-byte app slot); compile does not verify the phone portal or physical device.
+- After adding Wi-Fi provisioning and removing deep sleep, `pio run -e nodemcu-32s` passed on 2026-11-16 using the new 4 MB partition table. The firmware occupies 1,330,276 bytes (65.5% of the 2,031,616-byte app slot); compile does not verify the phone portal or physical device.
+- After implementing week navigation, event/note alternation and configurable Pomodoro, `pio run -e nodemcu-32s` passed on 2026-11-16. The firmware occupies 1,333,364 bytes (65.6% of the 2,031,616-byte app slot). This confirms compilation only; button flow, e-paper refresh, buzzer timing, Wokwi behavior, and physical hardware remain unverified.
 - `pio run -e nodemcu-32s`: previously passed; firmware compiled, approximately 97% of configured app flash. This does not establish that the prototype works in Wokwi or on hardware.
 - `pio run -e esp32dev` in `simulation/wokwi`: passed on 2026-11-09 after configuring PlatformIO to build the mock sketch. This is compile-only; the team previously reported simulation issues, and current runtime behavior is not yet accepted.
 - `npm run build` in `web`: passed.
@@ -37,10 +38,9 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 
 ## Highest-priority next steps
 
-1. Rebuild firmware in small increments, beginning with a minimal four-button Wokwi circuit and visible e-paper mock; verify each increment before adding network/API behavior.
-2. Keep Wokwi behavior separate from production hardware validation. Confirm the real panel label and driver before claiming physical compatibility.
-3. Once the simulator flow works, add RTC/LCD, local Pomodoro, then Wi-Fi and Calendar fetch; verify event titles and descriptions on e-paper.
-4. Confirm real Calendar fetch reaches the device using a unique test `device_id`; never commit device tokens.
+1. Verify the production week/event/note and Pomodoro button flows in Wokwi or a controlled bench test; mock and production implementations are separate.
+2. Confirm the real panel label and driver before claiming physical compatibility; verify e-paper alternation/refresh and buzzer intervals on hardware.
+3. Reconfirm Calendar transfer reaches the device using a unique test `device_id`; never commit device tokens.
 
 ## Team handoff rule
 

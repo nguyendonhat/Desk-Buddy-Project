@@ -29,7 +29,7 @@ Thiết bị phải tiếp tục thực hiện các chức năng local cơ bản
 ### 3.1. Thời gian
 
 * LCD1602 hiển thị giờ và trạng thái Pomodoro.
-* E-paper hiển thị lịch trong ngày và sự kiện sắp tới.
+* E-paper hiển thị lịch tuần bảy ngày, các sự kiện và ghi chú trong phần mô tả event.
 * Sử dụng DS3231 để duy trì thời gian local khi mất nguồn USB; pin RTC không cấp nguồn cho ESP32 hoặc màn hình.
 
 ### 3.2. Google Calendar
@@ -51,6 +51,10 @@ Thiết bị phải tiếp tục thực hiện các chức năng local cơ bản
 * Sử dụng RGB LED và buzzer khi cần.
 
 ### 3.4. Pomodoro
+
+* Người dùng chọn số chu kỳ (1–12), thời gian làm (10–120 phút, bước 10) và thời gian nghỉ (5–60 phút, bước 5).
+* OK xác nhận lần lượt từng giá trị và bắt đầu sau khi xác nhận thời gian nghỉ.
+* Timer tiếp tục chạy khi người dùng đổi mode. Buzzer phát hai nhịp khoảng một giây khi bắt đầu nghỉ giữa chu kỳ và phát liên tục khoảng ba giây khi hoàn tất.
 
 * Start.
 * Reset.
@@ -77,8 +81,10 @@ Khi mất Wi-Fi:
 
 * E-paper là màn hình chính cho lịch, ghi chú trong mô tả event, và Pomodoro.
 * LCD1602 là màn phụ hiển thị đồng hồ/ngày và trạng thái Pomodoro.
-* Dùng bốn nút MODE, UP, DOWN, OK. MODE đổi màn; giữ MODE 5 giây yêu cầu deep sleep. UP/DOWN điều hướng nội dung hoặc chỉnh thời lượng Pomodoro. OK mở ghi chú hoặc bắt đầu/tạm dừng Pomodoro.
-* Hành vi chi tiết có thể được tinh chỉnh khi dựng lại firmware, nhưng không được giảm còn ba nút.
+* Dùng bốn nút MODE, UP, DOWN, OK. MODE nhấn ngắn chuyển tuần tự Calendar, Note, Pomodoro, Account và không đưa thiết bị vào deep sleep.
+* Calendar hiển thị tuần thứ Hai–Chủ nhật; UP/DOWN chọn ngày và OK mở danh sách event/nghi chú. Trong Note, UP/DOWN chuyển event, tiêu đề và mô tả luân phiên trên e-paper; OK hoặc 10 giây không thao tác quay lại lịch tuần.
+* Pomodoro thiết lập theo thứ tự số chu kỳ, thời gian làm (bước 10 phút), thời gian nghỉ (bước 5 phút); OK xác nhận từng mục và bắt đầu. Timer chạy nền khi đổi mode. Buzzer báo hai nhịp một giây ở lúc chuyển sang nghỉ và kêu ba giây khi kết thúc toàn bộ chu kỳ.
+* Trong Account, OK mở trang cấu hình Wi-Fi cục bộ. Không được giảm thiết kế còn ba nút.
 
 ## 4. Kiến trúc
 

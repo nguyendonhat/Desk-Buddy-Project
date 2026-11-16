@@ -35,6 +35,19 @@ inline int64_t daysFromCivil(int year, unsigned month, unsigned day) {
   return static_cast<int64_t>(era) * 146097 + static_cast<int64_t>(dayOfEra) - 719468;
 }
 
+inline void civilFromDays(int64_t days, int& year, unsigned& month, unsigned& day) {
+  days += 719468;
+  const int64_t era = (days >= 0 ? days : days - 146096) / 146097;
+  const unsigned dayOfEra = static_cast<unsigned>(days - era * 146097);
+  const unsigned yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+  year = static_cast<int>(yearOfEra) + static_cast<int>(era * 400);
+  const unsigned dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+  const unsigned monthPrime = (5 * dayOfYear + 2) / 153;
+  day = dayOfYear - (153 * monthPrime + 2) / 5 + 1;
+  month = monthPrime < 10 ? monthPrime + 3 : monthPrime - 9;
+  year += month <= 2;
+}
+
 // Convert an RFC3339 event start to the RTC's local-wall-time epoch. Date-only events
 // intentionally return false because they do not have a reminder time.
 inline bool parseEventLocalEpoch(const std::string& value, int32_t localUtcOffsetSeconds,

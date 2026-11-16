@@ -9,7 +9,7 @@ struct NavigationState {
   uint8_t dayOffset = 0;       // Calendar mode: 0=today, 1=tomorrow.
   uint8_t eventIndex = 0;      // Event/note page within the selected day.
   uint8_t notePage = 0;
-  uint16_t pomodoroMinutes = 25;
+  uint16_t pomodoroMinutes = 30;
   bool pomodoroRunning = false;
 };
 

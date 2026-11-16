@@ -16,7 +16,7 @@ This pin map is for the classic ESP-WROOM-32 DevKit and SPI e-paper. It is not f
 - E-paper: show today's events and the next event. Refresh only when the data changes or every few minutes; do not animate a seconds clock on e-paper.
 - 16×2 LCD: show the live clock on row 1 and Pomodoro state/countdown on row 2.
 - DS3231: keep time while USB power is removed. Its coin cell powers the RTC only, not the ESP32 or displays.
-- Buttons: tap MODE to cycle Calendar, Notes, Pomodoro, and Account; hold MODE for 5 seconds for deep sleep; UP/DOWN scroll events and note pages or adjust Pomodoro duration; OK opens a note or starts/pauses Pomodoro.
+- Buttons: tap MODE to cycle Calendar, Notes, Pomodoro, and Account; MODE only changes modes and does not put the device to sleep. Calendar shows a seven-day week: UP/DOWN selects the day and OK opens its events. In Notes, UP/DOWN changes events, the e-paper alternates title/description, and OK returns to the week view. Pomodoro uses UP/DOWN to configure cycles/work/break and OK to advance setup/start. Its timer continues across mode changes. On Account, OK opens Wi-Fi setup.
 - RGB LED and buzzer: indicate focus, break, upcoming event, and timer completion.
 
 ## Suggested ESP32-WROOM-32 DevKit pin map

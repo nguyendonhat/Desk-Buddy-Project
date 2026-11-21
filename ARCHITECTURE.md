@@ -6,7 +6,7 @@ Desk Buddy gồm 4 thành phần phần mềm/hệ thống chính:
 
 1. NodeMCU-32S (ESP32-WROOM-32)
 2. Cloudflare Worker
-3. Web Dashboard
+3. Web account-linking page
 4. Google Calendar
 
 Phần cứng local gồm:
@@ -17,14 +17,14 @@ Phần cứng local gồm:
 * DS3231 backup coin cell (RTC only)
 * RGB LED
 * Buzzer
-* Three buttons
+* Four buttons: MODE, UP, DOWN, OK
 
 ## 2. Kiến trúc tổng thể
 
 ```text
 User
   ↓
-Web Dashboard
+  Web account-linking page
   ↓
 Google OAuth
   ↓
@@ -49,6 +49,7 @@ NodeMCU-32S (ESP32-WROOM-32)
 
 * Kết nối Wi-Fi.
 * Reconnect Wi-Fi.
+* Phát access point cấu hình lần đầu/đổi mạng; nhận SSID và mật khẩu qua trang cục bộ rồi lưu trong NVS.
 * Gọi API Calendar.
 * Parse JSON chuẩn.
 * Hiển thị dữ liệu.
@@ -63,16 +64,16 @@ NodeMCU-32S (ESP32-WROOM-32)
 * Gọi Google Calendar API.
 * Chuẩn hóa dữ liệu Calendar.
 * Cung cấp Calendar API cho ESP32.
-* Nhận device commands.
 * Xử lý lỗi HTTP.
-* Quản lý secrets bằng environment variables.
+* Lưu OAuth state, browser session và liên kết/tokens Calendar trong KV theo `device_id`; Production và Preview dùng namespace riêng.
+* Quản lý secrets bằng environment variables/secrets của Cloudflare.
 
-### Web Dashboard
+### Web account-linking page
 
-* Cho người dùng kết nối Google Calendar.
-* Hiển thị trạng thái kết nối.
-* Hiển thị Calendar.
-* Gửi command Pomodoro.
+* Là trang trung gian để đăng nhập Google, cấp quyền đọc và chọn Calendar cho một `device_id`.
+* Hiển thị trạng thái kết nối và nút đăng xuất/đổi tài khoản.
+* Đăng xuất xóa kết nối hiện tại; tài khoản đăng nhập kế tiếp thay thế kết nối Calendar trước đó.
+* Không cần thay thế ứng dụng Calendar hay làm dashboard nhiều chức năng.
 
 ### Google Calendar
 
@@ -83,7 +84,7 @@ Là nguồn dữ liệu lịch của người dùng.
 ```text
 User
  ↓
-Web Dashboard
+Web account-linking page
  ↓
 Google Login
  ↓
@@ -152,10 +153,11 @@ Calendar mới chỉ được cập nhật khi có kết nối lại.
 
 ## 8. Device ID
 
-Prototype sử dụng:
+Prototype mặc định sử dụng:
 
 ```text
 DB001
 ```
 
 Device ID phải được gửi đúng theo API contract.
+Mỗi thiết bị thử nghiệm/người dùng cần `device_id` riêng. Không dùng chung ID giữa các agent khi kiểm tra đổi tài khoản vì kết nối mới sẽ thay thế kết nối gắn với ID đó.

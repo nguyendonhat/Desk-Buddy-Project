@@ -52,10 +52,10 @@ function renderEvents(events) {
   calendarMessage.textContent = '';
   calendarMessage.classList.remove('error');
   const orderedEvents = [...events].sort((left, right) =>
-    calendarEventTimestamp(left.start, left.start_time_zone) - calendarEventTimestamp(right.start, right.start_time_zone));
+    calendarEventTimestamp(left.start) - calendarEventTimestamp(right.start));
   const eventsByDay = new Map();
   for (const event of orderedEvents) {
-    const dateKey = calendarEventDateKey(event.start, event.start_time_zone);
+    const dateKey = calendarEventDateKey(event.start);
     if (!eventsByDay.has(dateKey)) eventsByDay.set(dateKey, []);
     eventsByDay.get(dateKey).push(event);
   }
@@ -76,7 +76,7 @@ function renderEvents(events) {
       time.className = 'event-time';
       time.textContent = /^\d{4}-\d{2}-\d{2}$/.test(event.start)
         ? 'Cả ngày'
-        : `${formatCalendarEventTime(event.start, event.start_time_zone)} – ${formatCalendarEventTime(event.end, event.end_time_zone)}`;
+        : `${formatCalendarEventTime(event.start)} – ${formatCalendarEventTime(event.end)}`;
       const title = document.createElement('h4');
       title.className = 'event-title';
       title.textContent = event.title || '(Không có tiêu đề)';

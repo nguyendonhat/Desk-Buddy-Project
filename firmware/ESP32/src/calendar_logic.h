@@ -82,6 +82,17 @@ inline bool parseEventLocalEpoch(const std::string& value, int32_t localUtcOffse
   return true;
 }
 
+inline bool parseEventLocalClock(const std::string& value, int32_t localUtcOffsetSeconds,
+                                 int& hour, int& minute) {
+  int64_t localEpoch = 0;
+  if (!parseEventLocalEpoch(value, localUtcOffsetSeconds, localEpoch)) return false;
+  int64_t secondsOfDay = localEpoch % 86400;
+  if (secondsOfDay < 0) secondsOfDay += 86400;
+  hour = static_cast<int>(secondsOfDay / 3600);
+  minute = static_cast<int>((secondsOfDay % 3600) / 60);
+  return true;
+}
+
 inline bool isWithinReminderWindow(int64_t eventEpoch, int64_t nowEpoch, int64_t windowSeconds) {
   const int64_t secondsUntil = eventEpoch - nowEpoch;
   return secondsUntil >= 0 && secondsUntil <= windowSeconds;

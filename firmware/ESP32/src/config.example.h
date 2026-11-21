@@ -1,9 +1,8 @@
 #pragma once
 
 // Copy this file to config.h and enter local values. config.h is git-ignored.
-#define WIFI_SSID "replace-with-wifi-name"
-#define WIFI_PASSWORD "replace-with-wifi-password"
 #define API_BASE_URL "https://your-worker.example.workers.dev"
+#define WEB_APP_URL "https://your-desk-buddy-web.example.com"
 #define DEVICE_ID "DB001"
 #define DEVICE_API_TOKEN "replace-with-the-matching-worker-device-token"
 
@@ -15,5 +14,5 @@ replace-with-the-root-ca-pem
 -----END CERTIFICATE-----
 )CERT";
 
-// Vietnam time is UTC+7. Set this to the calendar's local offset if changed.
+// Calendar display and RTC reminders use Vietnam time (UTC+7).
 constexpr long LOCAL_UTC_OFFSET_SECONDS = 7 * 60 * 60;

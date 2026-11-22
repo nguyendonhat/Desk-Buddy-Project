@@ -1,6 +1,6 @@
 # ESP32 Calendar firmware
 
-This first firmware increment connects a NodeMCU-32S to Wi-Fi, reads the DS3231, fetches normalized Calendar events from the Worker, shows the clock on the LCD1602, and shows up to four events on the WeAct 2.9-inch monochrome e-paper. It also gives a short LED/buzzer reminder for an event starting within 15 minutes.
+The production prototype connects a NodeMCU-32S to Wi-Fi, reads the DS3231, fetches normalized Calendar events from the Worker, shows date/time and connection status on the LCD1602, and provides Calendar, event-note, Pomodoro, and account screens on the WeAct 2.9-inch monochrome e-paper. It also gives a short LED/buzzer reminder for an event starting within 15 minutes.
 
 ## Hardware assumptions
 
@@ -15,7 +15,7 @@ This first firmware increment connects a NodeMCU-32S to Wi-Fi, reads the DS3231,
 
 - MODE cycles Calendar, Notes, Pomodoro, and Google-account setup.
 - Tap MODE to change page. MODE always changes the current screen; there is no sleep gesture.
-- Calendar shows Monday through Sunday. UP/DOWN selects a weekday; OK opens that day's events and notes. In Notes, UP/DOWN switches events, title and description alternate every three seconds, and OK returns to the week view. Ten seconds idle also returns to the week view.
+- Calendar shows Monday through Sunday. UP/DOWN selects a weekday; OK opens that day's events and notes. In Notes, UP/DOWN switches events, title and description alternate every four seconds, and OK returns to the week view. Fifteen seconds idle also returns to the week view.
 - Pomodoro setup uses UP/DOWN to adjust cycles (1–12), work duration (10–120 minutes in 10-minute steps), and break duration (5–60 minutes in 5-minute steps). OK confirms each setting and starts the timer after the third confirmation. Work/break timing continues while MODE switches screens.
 - At a work-to-break transition the buzzer sounds twice for about one second per pulse; when all cycles finish it sounds for about three seconds and returns to Pomodoro setup.
 - On Account, OK opens the Wi-Fi setup access point. MODE changes screens in every mode.

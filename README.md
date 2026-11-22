@@ -1,6 +1,10 @@
-# Desk-Buddy-Project
+# Desk Buddy
 
-Github của nhóm Tour de Force — một thiết bị bàn làm việc hiển thị Google Calendar, ghi chú sự kiện, Pomodoro và đồng hồ trên ESP32 + e-paper + LCD.
+Desk Buddy là prototype thiết bị để bàn dùng ESP32, e-paper và LCD1602 để xem Google Calendar, ghi chú sự kiện, Pomodoro và đồng hồ offline. Web app liên kết tài khoản Google; Cloudflare Worker xử lý OAuth và cung cấp dữ liệu lịch cho thiết bị.
+
+**Muốn tự làm một thiết bị giống dự án này?** Bắt đầu với [Hướng dẫn dựng Desk Buddy từ đầu](SETUP_GUIDE.md). Hướng dẫn liệt kê ứng dụng cần cài, phần cứng, cấu hình Google OAuth/Cloudflare, build firmware và chạy mô phỏng.
+
+**Chỉ muốn chạy project trên máy?** Xem [các lệnh build và kiểm tra](#build--nạp-firmware) hoặc [mô phỏng Wokwi](#chạy-mô-phỏng-wokwi).
 
 AI agents and contributors: start with [`AGENTS.md`](AGENTS.md) and [`STATUS.md`](STATUS.md), then follow the issue/branch/PR workflow in [`CONTRIBUTING.md`](CONTRIBUTING.md). `AGENTS.md` is the shared project brief and contains a reusable prompt for other coding agents.
 
@@ -45,7 +49,7 @@ Chi tiết tại [`ARCHITECTURE.md`](ARCHITECTURE.md) · API contract tại [`AP
 
 ### Vai trò hai màn hình
 
-- **LCD1602** chỉ hiển thị ngày, giờ, thứ liên tục. ESP32 lấy giờ từ DS3231 để LCD vẫn chạy khi mất Wi-Fi; khi có Wi-Fi, thiết bị có thể đồng bộ RTC qua NTP. Pomodoro không thay nội dung đồng hồ trên LCD.
+- **LCD1602** hiển thị ngày ở dòng đầu và giờ cùng trạng thái online/offline ở dòng hai. ESP32 lấy giờ từ DS3231 để LCD vẫn chạy khi mất Wi-Fi; khi có Wi-Fi, thiết bị có thể đồng bộ RTC qua NTP. Pomodoro không thay nội dung LCD.
 - **E-paper** là giao diện chính để xem NOTE, điều khiển Pomodoro, quản lý tài khoản và cài đặt ngày giờ. ESP32 cập nhật từng màn riêng; hai màn không nối trực tiếp với nhau.
 - Pomodoro chạy nền trên ESP32, nên tiếp tục đếm khi người dùng chuyển sang tab khác.
 
@@ -59,7 +63,7 @@ Chi tiết tại [`ARCHITECTURE.md`](ARCHITECTURE.md) · API contract tại [`AP
 
 | Chế độ | Cách dùng dự kiến |
 |---|---|
-| **Calendar / NOTE** | Calendar hiển thị 7 ngày từ thứ Hai đến Chủ nhật; UP/DOWN chọn ngày, OK mở ghi chú/sự kiện của ngày đó. Trong NOTE, UP/DOWN chuyển giữa các sự kiện. E-paper luân phiên tiêu đề sự kiện và note mỗi 3 giây; nội dung dài tự chuyển trang. OK quay lại lịch tuần; sau 10 giây không thao tác cũng quay về lịch tuần. |
+| **Calendar / NOTE** | Calendar hiển thị 7 ngày từ thứ Hai đến Chủ nhật; UP/DOWN chọn ngày, OK mở ghi chú/sự kiện của ngày đó. Trong NOTE, UP/DOWN chuyển giữa các sự kiện. E-paper luân phiên tiêu đề sự kiện và note mỗi 4 giây; nội dung dài tự chuyển trang. OK quay lại lịch tuần; sau 15 giây không thao tác cũng quay về lịch tuần. |
 | **Pomodoro** | OK lần lượt xác nhận số chu kỳ, thời gian làm việc và thời gian nghỉ rồi bắt đầu. UP/DOWN chỉnh chu kỳ từng 1 (1–12), thời gian làm việc từng 10 phút (10–120) và nghỉ từng 5 phút (5–60). Khi hết một phiên làm, buzzer kêu hai nhịp khoảng 1 giây; hoàn tất toàn bộ chu kỳ, buzzer kêu khoảng 3 giây. MODE đổi màn hình mà timer và cấu hình vẫn giữ nguyên trong lúc chạy. |
 | **Account** | Hiển thị QR để liên kết Google Calendar; OK mở điểm truy cập cấu hình Wi-Fi để chọn mạng và nhập mật khẩu. MODE đổi màn hình. |
 
@@ -98,6 +102,7 @@ Desk-Buddy-Project/
 │   └── src/index.ts
 ├── web/                     ← Trang liên kết tài khoản Google (Vite)
 │   └── src/main.js
+├── SETUP_GUIDE.md            ← Hướng dẫn dựng lại project từ đầu
 ├── ARCHITECTURE.md
 ├── API.md
 └── HARDWARE_DESIGN.md
@@ -107,7 +112,7 @@ Desk-Buddy-Project/
 
 ## Chạy local
 
-Yêu cầu: Node.js 20+, npm.
+Yêu cầu: Node.js LTS 22 trở lên, npm.
 
 ### 1. Cấu hình Google OAuth
 
@@ -120,6 +125,8 @@ http://localhost:8787/api/oauth/google/callback
 Sao chép `worker/cloudflare/.dev.vars.example` thành `worker/cloudflare/.dev.vars` rồi điền giá trị:
 
 ```dotenv
+APP_ENV=local
+WEB_ORIGIN=http://localhost:5173
 GOOGLE_CLIENT_ID=...apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=http://localhost:8787/api/oauth/google/callback

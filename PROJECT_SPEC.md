@@ -28,7 +28,7 @@ Thiết bị phải tiếp tục thực hiện các chức năng local cơ bản
 
 ### 3.1. Thời gian
 
-* LCD1602 hiển thị giờ và trạng thái Pomodoro.
+* LCD1602 hiển thị ngày, giờ và trạng thái kết nối; Pomodoro hiển thị trên e-paper.
 * E-paper hiển thị lịch tuần bảy ngày, các sự kiện và ghi chú trong phần mô tả event.
 * Sử dụng DS3231 để duy trì thời gian local khi mất nguồn USB; pin RTC không cấp nguồn cho ESP32 hoặc màn hình.
 
@@ -80,9 +80,9 @@ Khi mất Wi-Fi:
 ### 3.6. Màn hình và nút bấm
 
 * E-paper là màn hình chính cho lịch, ghi chú trong mô tả event, và Pomodoro.
-* LCD1602 là màn phụ hiển thị đồng hồ/ngày và trạng thái Pomodoro.
+* LCD1602 là màn phụ hiển thị ngày, giờ và trạng thái kết nối online/offline. E-paper hiển thị Pomodoro.
 * Dùng bốn nút MODE, UP, DOWN, OK. MODE nhấn ngắn chuyển tuần tự Calendar, Note, Pomodoro, Account và không đưa thiết bị vào deep sleep.
-* Calendar hiển thị tuần thứ Hai–Chủ nhật; UP/DOWN chọn ngày và OK mở danh sách event/nghi chú. Trong Note, UP/DOWN chuyển event, tiêu đề và mô tả luân phiên trên e-paper; OK hoặc 10 giây không thao tác quay lại lịch tuần.
+* Calendar hiển thị tuần thứ Hai–Chủ nhật; UP/DOWN chọn ngày và OK mở danh sách event/nghi chú. Trong Note, UP/DOWN chuyển event, tiêu đề và mô tả luân phiên trên e-paper mỗi 4 giây; OK hoặc 15 giây không thao tác quay lại lịch tuần.
 * Pomodoro thiết lập theo thứ tự số chu kỳ, thời gian làm (bước 10 phút), thời gian nghỉ (bước 5 phút); OK xác nhận từng mục và bắt đầu. Timer chạy nền khi đổi mode. Buzzer báo hai nhịp một giây ở lúc chuyển sang nghỉ và kêu ba giây khi kết thúc toàn bộ chu kỳ.
 * Trong Account, OK mở trang cấu hình Wi-Fi cục bộ. Không được giảm thiết kế còn ba nút.
 

@@ -1,0 +1,4 @@
+GxEPD2
+U8g2_for_Adafruit_GFX
+RTClib
+LiquidCrystal_I2C

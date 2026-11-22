@@ -1,0 +1,282 @@
+{
+  "version": 1,
+  "author": "Desk Buddy team",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 40,
+      "left": 30,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-lcd1602",
+      "id": "lcd",
+      "top": -120,
+      "left": 320,
+      "attrs": {
+        "pins": "i2c",
+        "i2cAddress": "0x27",
+        "background": "blue",
+        "color": "white"
+      }
+    },
+    {
+      "type": "board-epaper-2in9",
+      "id": "epd",
+      "top": 100,
+      "left": 340,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ds1307",
+      "id": "rtc",
+      "top": 360,
+      "left": 320,
+      "attrs": {
+        "initTime": "2026-11-07T08:00:00Z"
+      }
+    },
+    {
+      "type": "wokwi-rgb-led",
+      "id": "rgb",
+      "top": 380,
+      "left": 30,
+      "attrs": {
+        "common": "cathode"
+      }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 500,
+      "left": 30,
+      "attrs": {
+        "volume": "0.25"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "mode",
+      "top": 520,
+      "left": 300,
+      "attrs": {
+        "color": "blue",
+        "label": "MODE"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "up",
+      "top": 520,
+      "left": 390,
+      "attrs": {
+        "color": "green",
+        "label": "UP"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "down",
+      "top": 520,
+      "left": 480,
+      "attrs": {
+        "color": "orange",
+        "label": "DOWN"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "ok",
+      "top": 520,
+      "left": 570,
+      "attrs": {
+        "color": "red",
+        "label": "OK"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "esp:D21",
+      "lcd:SDA",
+      "green",
+      []
+    ],
+    [
+      "esp:D22",
+      "lcd:SCL",
+      "blue",
+      []
+    ],
+    [
+      "esp:3V3",
+      "lcd:VCC",
+      "red",
+      []
+    ],
+    [
+      "esp:GND.1",
+      "lcd:GND",
+      "black",
+      []
+    ],
+    [
+      "esp:D21",
+      "rtc:SDA",
+      "green",
+      []
+    ],
+    [
+      "esp:D22",
+      "rtc:SCL",
+      "blue",
+      []
+    ],
+    [
+      "esp:VIN",
+      "rtc:5V",
+      "red",
+      []
+    ],
+    [
+      "esp:GND.1",
+      "rtc:GND",
+      "black",
+      []
+    ],
+    [
+      "esp:D18",
+      "epd:CLK",
+      "orange",
+      []
+    ],
+    [
+      "esp:D23",
+      "epd:DIN",
+      "blue",
+      []
+    ],
+    [
+      "esp:D27",
+      "epd:CS",
+      "white",
+      []
+    ],
+    [
+      "esp:D26",
+      "epd:DC",
+      "purple",
+      []
+    ],
+    [
+      "esp:D25",
+      "epd:RST",
+      "green",
+      []
+    ],
+    [
+      "esp:D34",
+      "epd:BUSY",
+      "yellow",
+      []
+    ],
+    [
+      "esp:3V3",
+      "epd:VCC",
+      "red",
+      []
+    ],
+    [
+      "esp:GND.1",
+      "epd:GND",
+      "black",
+      []
+    ],
+    [
+      "esp:D13",
+      "rgb:R",
+      "red",
+      []
+    ],
+    [
+      "esp:D14",
+      "rgb:G",
+      "green",
+      []
+    ],
+    [
+      "esp:RX2",
+      "rgb:B",
+      "blue",
+      []
+    ],
+    [
+      "esp:GND.2",
+      "rgb:COM",
+      "black",
+      []
+    ],
+    [
+      "esp:TX2",
+      "buzzer:2",
+      "orange",
+      []
+    ],
+    [
+      "esp:GND.2",
+      "buzzer:1",
+      "black",
+      []
+    ],
+    [
+      "esp:D32",
+      "mode:1.l",
+      "green",
+      []
+    ],
+    [
+      "mode:2.l",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "esp:D33",
+      "up:1.l",
+      "green",
+      []
+    ],
+    [
+      "up:2.l",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "esp:D19",
+      "down:1.l",
+      "green",
+      []
+    ],
+    [
+      "down:2.l",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "esp:D35",
+      "ok:1.l",
+      "green",
+      []
+    ],
+    [
+      "ok:2.l",
+      "esp:GND.1",
+      "black",
+      []
+    ]
+  ]
+}

@@ -23,6 +23,8 @@ Nếu cần thay đổi API, phải thống nhất với toàn nhóm trước.
 GET /api/calendar?device_id=DB001
 ```
 
+Worker returns events in the current Vietnam calendar week: Monday 00:00 through the following Monday 00:00 (`Asia/Ho_Chi_Minh`, with the end boundary excluded by Google Calendar). The window is aligned to calendar weeks rather than the seven days after the request time.
+
 Browser requests may use the existing HttpOnly session cookie. ESP32 requests must send the token configured for that device in the Worker secret `DEVICE_API_TOKENS`:
 
 ```http

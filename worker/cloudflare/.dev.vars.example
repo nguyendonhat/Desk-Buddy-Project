@@ -1,5 +1,7 @@
 # Copy to .dev.vars and set values from your Google Cloud OAuth client.
 # This file is an example only. Never commit .dev.vars or real credentials.
+APP_ENV=local
+WEB_ORIGIN=http://localhost:5173
 GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=replace-with-google-oauth-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8787/api/oauth/google/callback

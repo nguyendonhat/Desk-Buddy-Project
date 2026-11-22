@@ -47,7 +47,8 @@ const SESSION_KEY_PREFIX = 'oauth-session:';
 const CONNECTION_KEY_PREFIX = 'connection:';
 const CALENDAR_PAGE_SIZE = 250;
 export const CALENDAR_DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
-const CALENDAR_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const CALENDAR_DAY_MS = 24 * 60 * 60 * 1000;
+const CALENDAR_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 const jsonHeaders = { 'content-type': 'application/json; charset=utf-8' };
 
 class CalendarError extends Error {
@@ -270,6 +271,22 @@ interface CalendarWindow {
   timeMax: string;
 }
 
+export function calendarWeekWindow(nowEpochMs: number): CalendarWindow {
+  // Calculate Monday midnight in Vietnam time, independent of the Worker host timezone.
+  const vietnamNow = new Date(nowEpochMs + CALENDAR_UTC_OFFSET_MS);
+  const vietnamMidnight = Date.UTC(
+    vietnamNow.getUTCFullYear(),
+    vietnamNow.getUTCMonth(),
+    vietnamNow.getUTCDate(),
+  );
+  const daysSinceMonday = (vietnamNow.getUTCDay() + 6) % 7;
+  const mondayUtc = vietnamMidnight - daysSinceMonday * CALENDAR_DAY_MS - CALENDAR_UTC_OFFSET_MS;
+  return {
+    timeMin: new Date(mondayUtc).toISOString(),
+    timeMax: new Date(mondayUtc + 7 * CALENDAR_DAY_MS).toISOString(),
+  };
+}
+
 async function authorizedGoogleFetch(connection: Connection, env: Env, apiUrl: URL): Promise<Response> {
   let accessToken = connection.accessTokenExpiresAt > Date.now()
     ? connection.tokens.access_token
@@ -386,11 +403,7 @@ async function handleCalendar(request: Request, env: Env, url: URL): Promise<Res
   }
 
   try {
-    const windowStart = Date.now();
-    const window = {
-      timeMin: new Date(windowStart).toISOString(),
-      timeMax: new Date(windowStart + CALENDAR_WINDOW_MS).toISOString(),
-    };
+    const window = calendarWeekWindow(Date.now());
     let response = await fetchCalendarPage(connection, env, window);
     if (!response.ok) {
       console.info('[calendar-debug]', JSON.stringify({

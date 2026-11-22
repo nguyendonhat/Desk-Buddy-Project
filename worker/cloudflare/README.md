@@ -1,31 +1,42 @@
-# Cloudflare Worker setup
+# Cloudflare Worker
 
-## Persistent OAuth storage
+Worker này thực hiện Google OAuth, lưu trạng thái đăng nhập/liên kết Calendar trong Cloudflare KV, chuẩn hóa event về Desk Buddy API và cung cấp Calendar cho firmware ESP32.
 
-OAuth state, browser sessions, and Google tokens use a Cloudflare Workers KV namespace bound as `DESK_BUDDY_STORE`. Without this binding, OAuth routes cannot persist state between requests.
+## Bắt đầu
 
-The production namespace `DESK_BUDDY_STORE` has been created and bound to the `desk-buddy-api` Worker. Preview builds use a separate namespace so tests cannot overwrite production OAuth connections. Both IDs are recorded in `wrangler.toml`. For another environment, create a separate namespace:
+Hướng dẫn đầy đủ cho người mới, gồm tạo Google OAuth client, cấu hình `.dev.vars`, tạo KV namespace cho Cloudflare, deploy Worker/Pages và ghép firmware nằm ở [SETUP_GUIDE.md](../../SETUP_GUIDE.md).
+
+## Chạy local
+
+Yêu cầu Node.js LTS 22 trở lên và npm.
 
 ```powershell
-npx wrangler kv namespace create DESK_BUDDY_STORE
+cd worker\cloudflare
+npm install
+Copy-Item .dev.vars.example .dev.vars
 ```
 
-Copy that environment's returned namespace ID into its Wrangler configuration:
+Giữ `APP_ENV=local` và `WEB_ORIGIN=http://localhost:5173` trong `.dev.vars.example`; điền Google OAuth client ID/secret, callback local và `DEVICE_API_TOKENS`, rồi chạy:
 
-```toml
-[[kv_namespaces]]
-binding = "DESK_BUDDY_STORE"
-id = "<namespace-id>"
+```powershell
+npm run dev
 ```
 
-For local development, use Wrangler's local KV emulation or a separate test namespace. Do not use the production namespace for local development. Put local-only OAuth values in an ignored `.dev.vars` file; never commit it.
+Worker local chạy tại `http://localhost:8787`; health endpoint là `/api/health`. Local mode dùng KV emulation riêng. Không dùng namespace production cho dev/preview.
 
-Production Worker: `desk-buddy-api`. Production web origin: `https://desk-buddy-web-c1c.pages.dev`. Keep these aligned with the Cloudflare dashboard so future Wrangler deployments target the existing Worker and preserve its web origin.
+## Cloudflare binding và môi trường
 
-Cloudflare Workers Builds uses `/worker/cloudflare` for Production. Preview builds run from the repository root with `npx wrangler preview --config worker/cloudflare/wrangler.toml`, so they load this Worker configuration even in the monorepo.
+Worker yêu cầu KV binding tên `DESK_BUDDY_STORE` để lưu OAuth state, browser session và token Calendar. Tạo namespace riêng cho mỗi tài khoản Cloudflare/môi trường và thay các ID mẫu/cũ trong `wrangler.toml` bằng namespace ID của bạn. Tách production và preview để dữ liệu đăng nhập thử không lẫn với tài khoản người dùng thật.
 
-Previews use separate KV storage and do not inherit production secrets. They can verify the Worker build and health route; full Google OAuth must be verified on Production after the reviewed change is deployed.
+Cloudflare Worker cần các biến `WEB_ORIGIN` (origin của Pages, không kèm path) và `GOOGLE_REDIRECT_URI`, cùng secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DEVICE_API_TOKENS`. Mỗi device ID phải có token riêng trong JSON của `DEVICE_API_TOKENS`; firmware gửi token đó qua `Authorization: Bearer ...`.
 
-OAuth state keys expire after 10 minutes; browser session keys expire after 7 days. Connection records persist until the user logs out, revokes access, or the refresh token becomes invalid. Logout deletes the device's active connection and its Google tokens from KV.
+Không dùng URL, KV namespace, token hoặc OAuth client thuộc nhóm dự án trong bản fork. Không log hoặc commit OAuth token, `.dev.vars` hay secret. Chi tiết cách tạo KV và đặt secret xem [Cloudflare Workers KV](https://developers.cloudflare.com/kv/get-started/) và [Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
 
-Never expose KV contents or OAuth token values in logs or the Web Dashboard.
+## Kiểm tra
+
+```powershell
+npm run check
+npm run test:timezone
+```
+
+Timezone test kiểm tra tuần lịch Monday–Monday theo giờ Việt Nam và metadata sự kiện. Kiểm tra local không xác minh OAuth production hay API Calendar của tài khoản thật.

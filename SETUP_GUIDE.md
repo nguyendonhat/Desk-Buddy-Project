@@ -39,6 +39,8 @@ Xem sơ đồ chân, mức điện áp, pin RTC và cách đấu buzzer trong [H
 
 Prototype của nhóm bỏ qua LED trạng thái; không cần mua hoặc đấu LED và điện trở RGB.
 
+Mô hình 3D hiện có tại [hardware/3d/desk-buddy-concept.stl](hardware/3d/desk-buddy-concept.stl) chỉ là mô hình mô phỏng/ý tưởng. Các chi tiết lắp ráp bên trong và lỗ luồn dây chưa được thiết kế; chưa dùng mô hình này làm mẫu in cuối cùng hoặc để xác nhận kích thước/lắp vừa linh kiện.
+
 ## 2. Lấy mã nguồn và kiểm tra các phần không cần credential
 
 ```powershell

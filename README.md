@@ -25,7 +25,7 @@ AI agents and contributors: start with [`AGENTS.md`](AGENTS.md) and [`STATUS.md`
 
 Xem sơ đồ chân đầy đủ và lưu ý nguồn, level-shifter LCD tại [`HARDWARE_DESIGN.md`](HARDWARE_DESIGN.md).
 Sơ đồ lắp mạch đầy đủ, gồm driver buzzer, pull-up GPIO35 và phân tách I²C 3.3/5 V: [`HARDWARE_WIRING.md`](HARDWARE_WIRING.md).
-Repository hiện chưa có file CAD/mô hình 3D cho vỏ thiết bị.
+Mô hình 3D hiện có tại [`hardware/3d/desk-buddy-concept.stl`](hardware/3d/desk-buddy-concept.stl) chỉ là mô hình mô phỏng/ý tưởng; chi tiết lắp ráp bên trong và lỗ luồn dây chưa được thiết kế, nên chưa phải mẫu in hoàn chỉnh.
 
 ---
 

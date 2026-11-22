@@ -18,7 +18,6 @@
 #include "interaction.h"
 
 // WeAct Studio 2.9-inch monochrome panel, common SSD1680/GDEY029T94 variant.
-// Check the panel revision on the rear label if the display does not initialize.
 constexpr int EPD_CS = 27;
 constexpr int EPD_DC = 26;
 constexpr int EPD_RST = 25;
@@ -35,14 +34,15 @@ constexpr int BUTTON_DOWN = 19;
 constexpr int BUTTON_OK = 35; // Input-only; requires an external 10 kOhm pull-up.
 
 constexpr uint32_t CALENDAR_REFRESH_MS = 5UL * 60UL * 1000UL;
+constexpr uint32_t CALENDAR_RETRY_MS = 10UL * 1000UL;
 constexpr uint32_t WIFI_RETRY_MS = 10UL * 1000UL;
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 12000UL;
-constexpr uint32_t EVENT_NOTE_FLIP_MS = 3000UL;
-constexpr uint32_t NOTE_IDLE_RESET_MS = 10000UL;
+constexpr uint32_t EVENT_NOTE_FLIP_MS = 4000UL;
+constexpr uint32_t NOTE_IDLE_RESET_MS = 15000UL;
 constexpr uint32_t BUZZER_DOUBLE_PULSE_MS = 1000UL;
 constexpr uint32_t BUZZER_GAP_MS = 300UL;
 constexpr uint32_t BUZZER_FINISH_MS = 3000UL;
-constexpr size_t MAX_EVENTS = 8;
+constexpr size_t MAX_EVENTS = 30;
 constexpr long REMINDER_WINDOW_SECONDS = 15L * 60L;
 
 GxEPD2_BW<GxEPD2_290_GDEY029T94, GxEPD2_290_GDEY029T94::HEIGHT> epaper(
@@ -66,6 +66,7 @@ uint32_t lastWifiAttempt = 0;
 uint32_t lastLcdUpdate = 0;
 String lastReminderKey;
 bool rtcReady = false;
+bool ntpSynced = false;
 bool calendarLoaded = false;
 bool reminderActive = false;
 deskbuddy::NavigationState navigation;
@@ -135,6 +136,72 @@ int64_t eventLocalDay(const CalendarEvent& event) {
   if (deskbuddy::readDigits(start, 0, 4, year) && deskbuddy::readDigits(start, 5, 2, month) &&
       deskbuddy::readDigits(start, 8, 2, day)) return deskbuddy::daysFromCivil(year, month, day);
   return -1;
+}
+
+String formatEventLocalTime(const CalendarEvent& event) {
+  int64_t localEpoch = 0;
+  if (deskbuddy::parseEventLocalEpoch(std::string(event.start.c_str()), LOCAL_UTC_OFFSET_SECONDS, localEpoch)) {
+    int64_t secondsInDay = localEpoch % 86400;
+    if (secondsInDay < 0) secondsInDay += 86400;
+    const int hour = static_cast<int>(secondsInDay / 3600);
+    const int minute = static_cast<int>((secondsInDay % 3600) / 60);
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02d:%02d", hour, minute);
+    return String(buf);
+  }
+  if (event.start.length() >= 16) {
+    return event.start.substring(11, 16);
+  }
+  return "Ca ngay";
+}
+
+// Tách văn bản UTF-8 thành từng dòng (tôn trọng dấu \n và không cắt đứt ký tự tiếng Việt)
+size_t extractNotePageLines(const String& raw, size_t startLine, String outLines[3], size_t maxCharsPerLine = 32) {
+  if (outLines) {
+    outLines[0] = "";
+    outLines[1] = "";
+    outLines[2] = "";
+  }
+  size_t totalLines = 0;
+  size_t i = 0;
+  const size_t len = raw.length();
+
+  while (i < len) {
+    while (i < len && (raw[i] == '\r' || raw[i] == '\n' || raw[i] == ' ')) ++i;
+    if (i >= len) break;
+
+    size_t lineStart = i;
+    size_t charCount = 0;
+    size_t lastSpace = 0;
+
+    while (i < len && raw[i] != '\n' && raw[i] != '\r') {
+      if (raw[i] == ' ') lastSpace = i;
+      uint8_t c = static_cast<uint8_t>(raw[i]);
+      size_t step = 1;
+      if ((c & 0xE0) == 0xC0) step = 2;
+      else if ((c & 0xF0) == 0xE0) step = 3;
+      else if ((c & 0xF8) == 0xF0) step = 4;
+
+      if (charCount >= maxCharsPerLine) {
+        if (lastSpace > lineStart) i = lastSpace;
+        break;
+      }
+      i += step;
+      if (i > len) i = len;
+      charCount++;
+    }
+
+    if (outLines && totalLines >= startLine && totalLines < startLine + 3) {
+      String cleanLine = raw.substring(lineStart, i);
+      cleanLine.trim();
+      outLines[totalLines - startLine] = cleanLine;
+    }
+    totalLines++;
+
+    while (i < len && (raw[i] == ' ' || raw[i] == '\r')) ++i;
+    if (i < len && raw[i] == '\n') ++i;
+  }
+  return totalLines == 0 ? 1 : totalLines;
 }
 
 int64_t weekMondayEpochDay() {
@@ -324,10 +391,17 @@ void startWifiSetup() {
 }
 
 bool connectSavedWifi() {
-  if (!wifiPreferences.begin("wifi", true)) return false;
-  wifiSsid = wifiPreferences.getString("ssid", "");
-  wifiPassword = wifiPreferences.getString("password", "");
-  wifiPreferences.end();
+  if (wifiPreferences.begin("wifi", true)) {
+    wifiSsid = wifiPreferences.getString("ssid", "");
+    wifiPassword = wifiPreferences.getString("password", "");
+    wifiPreferences.end();
+  }
+#if defined(WIFI_SSID) && defined(WIFI_PASSWORD)
+  if (!wifiSsid.length() && strlen(WIFI_SSID) > 0) {
+    wifiSsid = WIFI_SSID;
+    wifiPassword = WIFI_PASSWORD;
+  }
+#endif
   if (!wifiSsid.length()) return false;
 
   WiFi.mode(WIFI_STA);
@@ -390,7 +464,7 @@ void startPomodoro(uint32_t now) {
   pomodoroCyclesRemaining = pomodoroCycles;
   pomodoroOnBreak = false;
   pomodoroDeadlineMs = now + static_cast<uint32_t>(navigation.pomodoroMinutes) * 60000UL;
-  lastPomodoroDisplayMinute = UINT32_MAX;
+  lastPomodoroDisplayMinute = navigation.pomodoroMinutes;
 }
 
 void finishPomodoro(uint32_t now) {
@@ -405,20 +479,28 @@ void finishPomodoro(uint32_t now) {
 
 void updatePomodoro(uint32_t now) {
   updatePomodoroBuzzer(now);
-  if (!navigation.pomodoroRunning || static_cast<int32_t>(now - pomodoroDeadlineMs) < 0) return;
-  if (!pomodoroOnBreak) {
-    if (pomodoroCyclesRemaining <= 1) {
-      finishPomodoro(now);
-      return;
+  if (!navigation.pomodoroRunning) return;
+
+  // Khi hết thời gian hiệp hiện tại -> chuyển sang Nghỉ hoặc Chu kỳ kế tiếp
+  if (static_cast<int32_t>(now - pomodoroDeadlineMs) >= 0) {
+    if (!pomodoroOnBreak) {
+      if (pomodoroCyclesRemaining <= 1) {
+        finishPomodoro(now);
+        return;
+      }
+      pomodoroOnBreak = true;
+      pomodoroDeadlineMs = now + static_cast<uint32_t>(pomodoroBreakMinutes) * 60000UL;
+      startBreakBuzzer(now);
+    } else {
+      if (pomodoroCyclesRemaining > 0) --pomodoroCyclesRemaining;
+      pomodoroOnBreak = false;
+      pomodoroDeadlineMs = now + static_cast<uint32_t>(navigation.pomodoroMinutes) * 60000UL;
+      startBreakBuzzer(now);
     }
-    pomodoroOnBreak = true;
-    pomodoroDeadlineMs = now + static_cast<uint32_t>(pomodoroBreakMinutes) * 60000UL;
-    startBreakBuzzer(now);
-  } else {
-    if (pomodoroCyclesRemaining > 0) --pomodoroCyclesRemaining;
-    pomodoroOnBreak = false;
-    pomodoroDeadlineMs = now + static_cast<uint32_t>(navigation.pomodoroMinutes) * 60000UL;
+    lastPomodoroDisplayMinute = UINT32_MAX; // Ép vẽ lại ngay khi chuyển hiệp
   }
+
+  // Refresh màn hình E-Paper đúng mỗi khi số phút còn lại giảm đi 1
   if (navigation.screen == deskbuddy::Screen::Pomodoro) {
     const uint32_t remainingMs = static_cast<int32_t>(pomodoroDeadlineMs - now) > 0
       ? pomodoroDeadlineMs - now : 0;
@@ -443,28 +525,31 @@ void drawCalendar() {
     epaperText.setForegroundColor(GxEPD_BLACK);
     epaperText.setBackgroundColor(GxEPD_WHITE);
     epaperText.setFont(u8g2_font_unifont_t_vietnamese2);
-    epaperText.setCursor(8, 18);
-    switch (navigation.screen) {
-      case deskbuddy::Screen::Calendar: epaperText.print("Lich tuan"); break;
-      case deskbuddy::Screen::Note: epaperText.print("Ghi chu su kien"); break;
-      case deskbuddy::Screen::Pomodoro: epaperText.print("Pomodoro"); break;
-      case deskbuddy::Screen::Account: epaperText.print("Tai khoan Google"); break;
+    if (navigation.screen != deskbuddy::Screen::Account) {
+      epaperText.setCursor(8, 18);
+      switch (navigation.screen) {
+        case deskbuddy::Screen::Calendar: epaperText.print("Lich tuan"); break;
+        case deskbuddy::Screen::Note: epaperText.print("Ghi chu su kien"); break;
+        case deskbuddy::Screen::Pomodoro: epaperText.print("Pomodoro"); break;
+        default: break;
+      }
+      epaper.drawLine(6, 23, epaper.width() - 6, 23, GxEPD_BLACK);
     }
-    epaper.drawLine(6, 23, epaper.width() - 6, 23, GxEPD_BLACK);
 
     if (navigation.screen == deskbuddy::Screen::Pomodoro) {
       if (navigation.pomodoroRunning) {
         const uint32_t remainingMs = static_cast<int32_t>(pomodoroDeadlineMs - millis()) > 0
           ? pomodoroDeadlineMs - millis() : 0;
-        const uint32_t remainingSeconds = (remainingMs + 999UL) / 1000UL;
-        char countdown[12];
-        snprintf(countdown, sizeof(countdown), "%02lu:%02lu",
-                 static_cast<unsigned long>(remainingSeconds / 60UL),
-                 static_cast<unsigned long>(remainingSeconds % 60UL));
+        const uint32_t displayMinute = (remainingMs + 59999UL) / 60000UL;
+        lastPomodoroDisplayMinute = displayMinute;
+
+        char countdown[20];
+        snprintf(countdown, sizeof(countdown), "Còn: %02lu phut", static_cast<unsigned long>(displayMinute));
+
         epaperText.setCursor(12, 49); epaperText.print("Chu ky con: "); epaperText.print(pomodoroCyclesRemaining);
         epaperText.setCursor(12, 72); epaperText.print(pomodoroOnBreak ? "Thoi gian nghi" : "Thoi gian lam");
         epaperText.setCursor(12, 105); epaperText.print(countdown);
-        epaperText.setCursor(132, 105); epaperText.print("MODE: doi che do");
+        epaperText.setCursor(142, 105); epaperText.print("MODE: doi che do");
       } else {
         epaperText.setCursor(12, 47); epaperText.print(pomodoroSetupStep == 0 ? "> Chu ky: " : "  Chu ky: ");
         epaperText.print(pomodoroCycles);
@@ -481,27 +566,31 @@ void drawCalendar() {
       link += urlEncode(DEVICE_ID);
       const int8_t qrStatus = qrcode_initText(&accountQr, accountQrData, 8, ECC_LOW, link.c_str());
       const int moduleScale = 2;
-      const int quiet = 4;
-      epaper.fillRect(4, 7, 120, 114, GxEPD_WHITE);
+      const int qrOffsetX = 12;
+      const int qrOffsetY = 15;
       for (uint8_t y = 0; qrStatus == 0 && y < accountQr.size; ++y) {
         for (uint8_t x = 0; x < accountQr.size; ++x) {
           if (qrcode_getModule(&accountQr, x, y)) {
-            epaper.fillRect(4 + (x + quiet) * moduleScale, 7 + (y + quiet) * moduleScale,
+            epaper.fillRect(qrOffsetX + x * moduleScale, qrOffsetY + y * moduleScale,
                             moduleScale, moduleScale, GxEPD_BLACK);
           }
         }
       }
+      // Chuyển sang phông chữ nhỏ 6x13 px để vừa khít cột bên phải
+      epaperText.setFont(u8g2_font_6x13_tf);
       if (qrStatus == 0) {
-        epaperText.setCursor(132, 48); epaperText.print("Quet QR bang dien thoai");
-        epaperText.setCursor(132, 68); epaperText.print("Chon tai khoan Google");
-        epaperText.setCursor(132, 88); epaperText.print("de cap quyen doc lich");
-        epaperText.setCursor(132, 112); epaperText.print("OK: cai dat Wi-Fi");
+        epaperText.setCursor(124, 28); epaperText.print("Tai khoan Google");
+        epaperText.setCursor(124, 50); epaperText.print("Quet QR bang dien thoai");
+        epaperText.setCursor(124, 68); epaperText.print("Chon tai khoan Google");
+        epaperText.setCursor(124, 86); epaperText.print("de cap quyen doc lich");
+        epaperText.setCursor(124, 110); epaperText.print("OK: cai dat Wi-Fi");
       } else {
-        epaperText.setCursor(132, 52); epaperText.print("Khong tao duoc QR");
-        epaperText.setCursor(132, 76); epaperText.print("Kiem tra WEB_APP_URL");
-        epaperText.setCursor(132, 100); epaperText.print("URL can ngan hon");
-        epaperText.setCursor(132, 118); epaperText.print("OK: cai dat Wi-Fi");
+        epaperText.setCursor(124, 36); epaperText.print("Khong tao duoc QR");
+        epaperText.setCursor(124, 58); epaperText.print("Kiem tra WEB_APP_URL");
+        epaperText.setCursor(124, 80); epaperText.print("URL can ngan hon");
+        epaperText.setCursor(124, 106); epaperText.print("OK: cai dat Wi-Fi");
       }
+
     } else if (navigation.screen == deskbuddy::Screen::Calendar) {
       static const char* weekdayLabels[7] = {"T2", "T3", "T4", "T5", "T6", "T7", "CN"};
       int weekYear;
@@ -557,35 +646,55 @@ void drawCalendar() {
       } else {
         int year; unsigned month, date;
         deskbuddy::civilFromDays(selectedCalendarEpochDay(), year, month, date);
-        char noteHeader[32];
-        snprintf(noteHeader, sizeof(noteHeader), "%02u/%02u  SU KIEN %u/%u",
-                 date, month, navigation.eventIndex + 1, selectedDayEventCount());
-        epaperText.setCursor(8, 41); epaperText.print(noteHeader);
+        char noteHeader[40];
         if (showingEventNote) {
+          snprintf(noteHeader, sizeof(noteHeader), "%02u/%02u  SU KIEN %u/%u - GHI CHU",
+                   date, month, navigation.eventIndex + 1, selectedDayEventCount());
+          epaperText.setCursor(8, 39); epaperText.print(noteHeader);
+
           const String description = events[selected].description;
           if (!description.length()) {
-            epaperText.setCursor(8, 75); epaperText.print("Khong co ghi chu");
+            epaperText.setCursor(8, 74); epaperText.print("Khong co ghi chu");
           } else {
-            epaperText.setCursor(8, 61); epaperText.print("GHI CHU");
-            const size_t offset = static_cast<size_t>(navigation.notePage) * 84;
+            String pageLines[3];
+            const size_t startLine = static_cast<size_t>(navigation.notePage) * 3;
+            const size_t totalLines = extractNotePageLines(description, startLine, pageLines, 32);
+            const size_t totalPages = (totalLines + 2) / 3;
+
             for (int line = 0; line < 3; ++line) {
-              const size_t start = offset + line * 28;
-              if (start >= description.length()) break;
-              epaperText.setCursor(8, 79 + line * 16);
-              epaperText.print(description.substring(start, start + 28));
+              if (pageLines[line].length() == 0) continue;
+              epaperText.setCursor(8, 58 + line * 18);
+              epaperText.print(pageLines[line]);
             }
-            const size_t totalPages = (description.length() + 83) / 84;
-            epaperText.setCursor(8, 119); epaperText.print("Trang "); epaperText.print(navigation.notePage + 1);
-            epaperText.print("/"); epaperText.print(totalPages);
+
+            epaperText.setCursor(8, 120);
+            epaperText.print("Trang ");
+            epaperText.print(navigation.notePage + 1);
+            epaperText.print("/");
+            epaperText.print(totalPages);
           }
         } else {
-          epaperText.setCursor(8, 79); epaperText.print(events[selected].title.substring(0, 34));
+          const String timeStr = formatEventLocalTime(events[selected]);
+          snprintf(noteHeader, sizeof(noteHeader), "%02u/%02u  SU KIEN %u/%u (%s)",
+                   date, month, navigation.eventIndex + 1, selectedDayEventCount(), timeStr.c_str());
+          epaperText.setCursor(8, 39); epaperText.print(noteHeader);
+
+          String titleLines[3];
+          extractNotePageLines(events[selected].title, 0, titleLines, 32);
+          epaperText.setCursor(8, 66); epaperText.print(titleLines[0]);
+          if (titleLines[1].length() > 0) {
+            epaperText.setCursor(8, 86); epaperText.print(titleLines[1]);
+          }
         }
-        epaperText.setCursor(146, 119); epaperText.print("UP/DOWN doi  OK: lich");
+        epaperText.setCursor(116, 120); epaperText.print("UP/DOWN: doi OK: lich");
       }
     }
   } while (epaper.nextPage());
   epaper.hibernate();
+
+  if (navigation.screen == deskbuddy::Screen::Note) {
+    lastEventNoteFlip = millis();
+  }
 }
 
 void checkReminder() {
@@ -619,35 +728,49 @@ void fetchCalendar() {
   HTTPClient http;
   String url = String(API_BASE_URL) + "/api/calendar?device_id=" + urlEncode(DEVICE_ID);
   if (!http.begin(client, url)) {
+    Serial.println("[CAL] Loi khoi tao URL");
     showLcdMessage("Calendar loi URL", "Kiem tra API URL");
     return;
   }
   http.addHeader("Authorization", String("Bearer ") + DEVICE_API_TOKEN);
   http.addHeader("Accept", "application/json");
   http.setTimeout(12000);
+
   const int status = http.GET();
+  Serial.printf("[CAL] HTTP status: %d\n", status);
   if (status == HTTP_CODE_OK) {
-    DynamicJsonDocument document(16 * 1024);
-    const DeserializationError error = deserializeJson(document, http.getStream());
+    String payload = http.getString();
+    JsonDocument document;
+    const DeserializationError error = deserializeJson(document, payload);
     if (!error && document["device_id"].as<String>() == DEVICE_ID) {
       eventCount = 0;
       JsonArray sourceEvents = document["events"].as<JsonArray>();
+      Serial.printf("[CAL] Server tra ve %u su kien\n", static_cast<unsigned>(sourceEvents.size()));
       for (JsonObject source : sourceEvents) {
-        if (eventCount >= MAX_EVENTS) break;
+        if (eventCount >= MAX_EVENTS) {
+          Serial.println("[CAL] Da cham gioi han MAX_EVENTS!");
+          break;
+        }
         events[eventCount].title = source["title"] | "(Khong co tieu de)";
         events[eventCount].start = source["start"] | "";
         events[eventCount].description = source["description"] | "";
+        Serial.printf("  #%u: [%s] %s\n", static_cast<unsigned>(eventCount + 1),
+                      events[eventCount].start.c_str(), events[eventCount].title.c_str());
         eventCount++;
       }
       calendarLoaded = true;
       drawCalendar();
       setStatusLed(false, true, false);
     } else {
+      Serial.printf("[CAL] Loi JSON (%s) hoac sai device_id. Raw: %s\n",
+                    error.c_str(), payload.substring(0, 200).c_str());
       showLcdMessage("JSON Calendar loi", "Kiem tra API");
     }
   } else if (status == HTTP_CODE_UNAUTHORIZED) {
+    Serial.println("[CAL] Loi 401: Sai Token hoac chua lien ket Google");
     showLcdMessage("Token/API loi", "Kiem tra ket noi");
   } else {
+    Serial.printf("[CAL] Loi API: %d\n", status);
     showLcdMessage("Calendar offline", "Se thu lai sau");
   }
   http.end();
@@ -670,6 +793,11 @@ void syncRtcFromNtp() {
   if (getLocalTime(&localTime, 8000)) {
     rtc.adjust(DateTime(localTime.tm_year + 1900, localTime.tm_mon + 1, localTime.tm_mday,
                         localTime.tm_hour, localTime.tm_min, localTime.tm_sec));
+    ntpSynced = true;
+    if (!restoreWeekDay) {
+      const DateTime now = rtc.now();
+      navigation.dayOffset = static_cast<uint8_t>((now.dayOfTheWeek() + 6) % 7);
+    }
   }
 }
 
@@ -680,32 +808,19 @@ void updateLcd() {
   }
   const DateTime now = rtc.now();
   char first[17];
+  char secondRaw[17];
   char second[17];
-  snprintf(first, sizeof(first), "%02d/%02d/%04d", now.day(), now.month(), now.year());
-  if (navigation.screen == deskbuddy::Screen::Pomodoro) {
-    if (navigation.pomodoroRunning) {
-      const uint32_t remainingMs = static_cast<int32_t>(pomodoroDeadlineMs - millis()) > 0
-        ? pomodoroDeadlineMs - millis() : 0;
-      const uint32_t remainingSeconds = (remainingMs + 999UL) / 1000UL;
-      snprintf(second, sizeof(second), "%c%02lu:%02lu C%u/%u", pomodoroOnBreak ? 'R' : 'W',
-               static_cast<unsigned long>(remainingSeconds / 60UL),
-               static_cast<unsigned long>(remainingSeconds % 60UL),
-               pomodoroCyclesRemaining, pomodoroCycles);
-    } else {
-      snprintf(second, sizeof(second), "C%u W%u B%u", pomodoroCycles,
-               static_cast<unsigned>(navigation.pomodoroMinutes), pomodoroBreakMinutes);
-    }
-  } else if (WiFi.status() == WL_CONNECTED) {
-    snprintf(second, sizeof(second), "%02d:%02d:%02d Online", now.hour(), now.minute(), now.second());
+
+  snprintf(first, sizeof(first), "%02d/%02d/%04d      ", now.day(), now.month(), now.year());
+  if (WiFi.status() == WL_CONNECTED) {
+    snprintf(secondRaw, sizeof(secondRaw), "%02d:%02d:%02d Online", now.hour(), now.minute(), now.second());
   } else {
-    snprintf(second, sizeof(second), "%02d:%02d:%02d Offline", now.hour(), now.minute(), now.second());
+    snprintf(secondRaw, sizeof(secondRaw), "%02d:%02d:%02d Offline", now.hour(), now.minute(), now.second());
   }
-  lcd.setCursor(0, 0);
-  lcd.print("                ");
+  snprintf(second, sizeof(second), "%-16s", secondRaw);
+
   lcd.setCursor(0, 0);
   lcd.print(first);
-  lcd.setCursor(0, 1);
-  lcd.print("                ");
   lcd.setCursor(0, 1);
   lcd.print(second);
 }
@@ -748,6 +863,8 @@ void setup() {
   updateLcd();
   fetchCalendar();
   lastCalendarFetch = millis();
+  lastNoteInteraction = millis();
+  lastEventNoteFlip = millis();
 }
 
 void loop() {
@@ -833,16 +950,16 @@ void loop() {
       queueNoteStateSave();
       drawCalendar();
     } else if (selectedEventArrayIndex() >= 0 && static_cast<uint32_t>(now - lastEventNoteFlip) >= EVENT_NOTE_FLIP_MS) {
-      lastEventNoteFlip = now;
       const int selected = selectedEventArrayIndex();
       if (selected >= 0 && showingEventNote) {
-        const size_t totalPages = events[selected].description.length()
-          ? (events[selected].description.length() + 83) / 84 : 1;
+        const size_t totalLines = extractNotePageLines(events[selected].description, 0, nullptr, 32);
+        const size_t totalPages = (totalLines + 2) / 3;
         navigation.notePage = static_cast<uint8_t>((navigation.notePage + 1) % totalPages);
         queueNoteStateSave();
       }
       showingEventNote = !showingEventNote;
       drawCalendar();
+      lastNoteInteraction = millis();
     }
   }
 
@@ -852,9 +969,14 @@ void loop() {
     lastLcdUpdate = now;
     updateLcd();
   }
-  if (now - lastCalendarFetch >= CALENDAR_REFRESH_MS) {
+
+  const uint32_t fetchInterval = calendarLoaded ? CALENDAR_REFRESH_MS : CALENDAR_RETRY_MS;
+  if (now - lastCalendarFetch >= fetchInterval) {
     lastCalendarFetch = now;
-    if (WiFi.status() == WL_CONNECTED) fetchCalendar();
+    if (WiFi.status() == WL_CONNECTED) {
+      if (!ntpSynced) syncRtcFromNtp();
+      fetchCalendar();
+    }
   }
   checkReminder();
   delay(20);

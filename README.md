@@ -254,7 +254,7 @@ Firmware dùng `GxEPD2_290_GDEY029T94`. **Trước khi nạp lên bo thật**, k
 
 ## Chạy mô phỏng Wokwi
 
-Sketch `simulation/wokwi/sketch.ino` là **mock không dùng OAuth/Wi-Fi/Google Calendar thật**. Mục đích: kiểm tra layout UI và button flow.
+Sketch `simulation/wokwi/sketch.ino` là **mock không dùng OAuth/Wi-Fi/Google Calendar thật**. Wokwi chủ yếu minh họa mô hình phần cứng và cách các linh kiện được nối; giao diện e-paper mô phỏng không thể hiện rõ hoặc đầy đủ các tính năng hiển thị trên thiết bị thật. Không dùng kết quả Wokwi để xác nhận trải nghiệm e-paper thực tế.
 
 ### Wokwi.com (không cần cài đặt)
 
@@ -275,7 +275,7 @@ Sketch `simulation/wokwi/sketch.ino` là **mock không dùng OAuth/Wi-Fi/Google 
    ```
 3. Chạy Wokwi từ VS Code extension.
 
-**Lưu ý**: Wokwi dùng driver `GxEPD2_290_BS` (hỗ trợ trong simulator); firmware thật dùng `GxEPD2_290_GDEY029T94`. Hành vi/layout không giống hệt nhau.
+**Lưu ý**: Wokwi dùng driver `GxEPD2_290_BS` (hỗ trợ trong simulator); firmware thật dùng `GxEPD2_290_GDEY029T94`. Mô phỏng chỉ giúp xem cách nối mô hình và luồng demo giới hạn; nó không trình bày rõ các tính năng e-paper như trên thiết bị thật, cũng không kiểm tra driver hoặc refresh của panel WeAct.
 
 ---
 
@@ -294,14 +294,15 @@ Test kiểm tra: parse RFC3339, tính reminder, điều hướng màn. Yêu cầ
 
 | Hạng mục | Kết quả |
 |---|---|
-| `pio run -e nodemcu-32s` | ✅ Thành công (~97% flash) |
-| `pio run -e esp32dev` (Wokwi) | ⚠️ Build từng thành công; nhóm báo mô phỏng hiện không hoạt động như mong muốn, cần dựng lại và xác minh |
+| Nạp firmware và thử các tính năng trên thiết bị thật | ✅ Người dùng báo đã nạp và thử thành công; kết quả được ghi nhận theo báo cáo người dùng |
+| Wokwi | ℹ️ Chỉ minh họa mô hình nối dây; không thể hiện rõ/đầy đủ tính năng trên e-paper thật |
+| `pio run -e nodemcu-32s` | ✅ Build đã thành công ở các lần kiểm tra trước; xem STATUS.md để biết lần kiểm tra gần nhất |
+| `pio run -e esp32dev` (Wokwi) | ✅ Build mock từng thành công; không đồng nghĩa xác minh hiển thị e-paper thật |
 | `npm run build` (web) | ✅ Thành công |
 | `npm run check` (Worker TypeScript) | ✅ Thành công |
 | Web/Worker timezone tests (9 cases) | ✅ Thành công |
 | `pio test -e native` | ⚠️ Chưa chạy được — máy thiếu `gcc/g++` |
-| Nạp firmware lên bo thật | ⏳ Chưa thực hiện — ESP32 chưa được nhận diện qua USB |
-| Hiển thị e-paper WeAct thật | ⏳ Chưa xác nhận — cần nạp và kiểm tra bo thật |
+| Nạp firmware và chức năng trên bo thật | ✅ Người dùng báo đã nạp và kiểm tra thành công |
 | Xác nhận driver `GxEPD2_290_GDEY029T94` | ⏳ Cần kiểm tra mã panel phía sau tấm e-paper |
 
 ---
@@ -310,14 +311,14 @@ Test kiểm tra: parse RFC3339, tính reminder, điều hướng màn. Yêu cầ
 
 | Hạng mục | Trạng thái |
 |---|---|
-| **Nạp firmware thật** | Cần ESP32 xuất hiện ở cổng COM (kiểm tra driver USB-serial và cáp data) |
+| **Nạp firmware thật** | Người dùng báo firmware đã được nạp và các tính năng đã thử thành công |
 | **Xác nhận driver e-paper** | Xem mã trên mặt sau panel; thay driver trong `main.cpp` nếu cần |
-| **Pomodoro chu kỳ/làm/nghỉ** | Luồng cấu hình, timer nền và tín hiệu buzzer đã biên dịch; cần xác minh hành vi trên thiết bị |
-| **Lịch tuần và luân phiên event/note** | Đã triển khai trong production firmware; cần xác minh nút bấm và refresh e-paper |
+| **Pomodoro chu kỳ/làm/nghỉ** | Đã triển khai; người dùng báo đã thử trên thiết bị thành công |
+| **Lịch tuần và luân phiên event/note** | Đã triển khai; người dùng báo đã thử trên thiết bị thành công |
 | **Cấu hình Wi-Fi** | Đã có; kết nối access point của ESP32, chọn mạng và nhập mật khẩu trên trang cục bộ |
-| **Ghi chú dài phân trang** | Code đã có; chưa thử trên phần cứng thật |
+| **Ghi chú dài phân trang** | Đã triển khai; người dùng báo đã thử trên thiết bị thành công |
 | **Lưu trữ OAuth bền vững** | Worker Production đã dùng KV; Preview dùng namespace riêng |
-| **Đăng nhập/đăng xuất Google** | Người dùng xác nhận hoạt động trên web đã deploy; Calendar trên ESP32 thật chưa xác minh |
+| **Đăng nhập/đăng xuất và Calendar trên thiết bị** | Người dùng báo đã thử các tính năng trên thiết bị thành công |
 | **Pairing thiết bị an toàn** | Quy trình cấp/thu hồi token chưa triển khai |
 
 ---

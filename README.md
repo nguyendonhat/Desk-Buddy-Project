@@ -301,9 +301,7 @@ Test kiểm tra: parse RFC3339, tính reminder, điều hướng màn. Yêu cầ
 | `npm run build` (web) | ✅ Thành công |
 | `npm run check` (Worker TypeScript) | ✅ Thành công |
 | Web/Worker timezone tests (9 cases) | ✅ Thành công |
-| `pio test -e native` | ⚠️ Chưa chạy được — máy thiếu `gcc/g++` |
 | Nạp firmware và chức năng trên bo thật | ✅ Người dùng báo đã nạp và kiểm tra thành công |
-| Xác nhận driver `GxEPD2_290_GDEY029T94` | ⏳ Cần kiểm tra mã panel phía sau tấm e-paper |
 
 ---
 

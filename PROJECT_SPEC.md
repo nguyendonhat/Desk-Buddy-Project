@@ -12,7 +12,6 @@ Kiến trúc của hệ thống gồm:
 * Màn hình e-paper WeAct Studio 2.9 inch, đen trắng, giao tiếp SPI
 * Màn hình LCD1602 giao tiếp I²C
 * DS3231 RTC
-* RGB LED
 * Piezo buzzer
 * Web account-linking page
 * Cloudflare Worker
@@ -48,7 +47,7 @@ Thiết bị phải tiếp tục thực hiện các chức năng local cơ bản
 ### 3.3. Reminder
 
 * Thông báo sự kiện sắp diễn ra.
-* Sử dụng RGB LED và buzzer khi cần.
+* Buzzer báo khi cần.
 
 ### 3.4. Pomodoro
 
@@ -60,7 +59,7 @@ Thiết bị phải tiếp tục thực hiện các chức năng local cơ bản
 * Reset.
 * Timer chạy local trên ESP32.
 * Có hiển thị trạng thái/thời gian.
-* RGB LED và buzzer có thể được sử dụng để báo trạng thái.
+* Buzzer báo chuyển trạng thái và hoàn tất hẹn giờ.
 
 ### 3.5. Offline
 
@@ -68,7 +67,7 @@ Khi mất Wi-Fi:
 
 * Clock vẫn chạy.
 * Pomodoro vẫn chạy.
-* RGB LED và buzzer vẫn hoạt động.
+* Buzzer vẫn hoạt động.
 * Thiết bị không được treo vì đang chờ Wi-Fi.
 
 ### 3.5.1. Cấu hình Wi-Fi
@@ -92,7 +91,7 @@ Người dùng → Web account-linking page → Google OAuth → Cloudflare Work
 
 Cloudflare Worker chuyển dữ liệu thành JSON chuẩn của Desk Buddy và cung cấp cho NodeMCU-32S.
 
-NodeMCU-32S điều khiển hai màn hình, RTC, RGB LED, buzzer và các chức năng local.
+NodeMCU-32S điều khiển hai màn hình, RTC, buzzer và các chức năng local.
 
 ## 5. Phần cứng
 
@@ -101,7 +100,6 @@ NodeMCU-32S điều khiển hai màn hình, RTC, RGB LED, buzzer và các chức
 * 1 × LCD1602 I²C
 * DS3231 RTC
 * Pin cúc áo dự phòng cho DS3231 (không cấp nguồn cho toàn thiết bị)
-* RGB LED
 * Piezo buzzer
 * 4 nút nhấn: MODE, UP, DOWN, OK
 * Bộ chuyển mức I²C 3.3 V ↔ 5 V cho LCD1602 nếu backpack kéo SDA/SCL lên 5 V

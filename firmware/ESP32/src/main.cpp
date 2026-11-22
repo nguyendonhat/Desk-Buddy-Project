@@ -24,9 +24,6 @@ constexpr int EPD_RST = 25;
 constexpr int EPD_BUSY = 34;
 constexpr int I2C_SDA = 21;
 constexpr int I2C_SCL = 22;
-constexpr int RGB_RED = 13;
-constexpr int RGB_GREEN = 14;
-constexpr int RGB_BLUE = 16;
 constexpr int BUZZER_PIN = 17;
 constexpr int BUTTON_MODE = 32;
 constexpr int BUTTON_UP = 33;
@@ -68,7 +65,6 @@ String lastReminderKey;
 bool rtcReady = false;
 bool ntpSynced = false;
 bool calendarLoaded = false;
-bool reminderActive = false;
 deskbuddy::NavigationState navigation;
 uint32_t lastButtonAt = 0;
 bool previousButtonsHigh[4] = {true, true, true, true};
@@ -266,12 +262,6 @@ String urlEncode(const String& value) {
     }
   }
   return encoded;
-}
-
-void setStatusLed(bool red, bool green, bool blue) {
-  digitalWrite(RGB_RED, red ? HIGH : LOW);
-  digitalWrite(RGB_GREEN, green ? HIGH : LOW);
-  digitalWrite(RGB_BLUE, blue ? HIGH : LOW);
 }
 
 void showLcdMessage(const char* first, const char* second) {
@@ -700,15 +690,12 @@ void drawCalendar() {
 void checkReminder() {
   if (!rtcReady || !calendarLoaded || eventCount == 0) return;
   const int64_t now = static_cast<int64_t>(rtc.now().unixtime());
-  reminderActive = false;
   for (size_t i = 0; i < eventCount; i++) {
     int64_t start = 0;
     if (!deskbuddy::parseEventLocalEpoch(std::string(events[i].start.c_str()), LOCAL_UTC_OFFSET_SECONDS, start)) continue;
     if (deskbuddy::isWithinReminderWindow(start, now, REMINDER_WINDOW_SECONDS)) {
-      reminderActive = true;
       if (deskbuddy::shouldBeepForEvent(std::string(events[i].start.c_str()), std::string(lastReminderKey.c_str()))) {
         lastReminderKey = events[i].start;
-        setStatusLed(true, false, false);
         if (!buzzerSignalActive) {
           digitalWrite(BUZZER_PIN, HIGH);
           delay(250);
@@ -717,7 +704,6 @@ void checkReminder() {
       }
     }
   }
-  setStatusLed(reminderActive, !reminderActive, false);
 }
 
 void fetchCalendar() {
@@ -760,7 +746,6 @@ void fetchCalendar() {
       }
       calendarLoaded = true;
       drawCalendar();
-      setStatusLed(false, true, false);
     } else {
       Serial.printf("[CAL] Loi JSON (%s) hoac sai device_id. Raw: %s\n",
                     error.c_str(), payload.substring(0, 200).c_str());
@@ -827,16 +812,12 @@ void updateLcd() {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(RGB_RED, OUTPUT);
-  pinMode(RGB_GREEN, OUTPUT);
-  pinMode(RGB_BLUE, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(BUTTON_MODE, INPUT_PULLUP);
   pinMode(BUTTON_UP, INPUT_PULLUP);
   pinMode(BUTTON_DOWN, INPUT_PULLUP);
   pinMode(BUTTON_OK, INPUT);
   loadNoteState();
-  setStatusLed(false, false, false);
   digitalWrite(BUZZER_PIN, LOW);
 
   Wire.begin(I2C_SDA, I2C_SCL);

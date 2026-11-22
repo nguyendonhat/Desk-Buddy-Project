@@ -15,7 +15,6 @@ Phần cứng local gồm:
 * LCD1602 with I²C interface
 * DS3231
 * DS3231 backup coin cell (RTC only)
-* RGB LED
 * Buzzer
 * Four buttons: MODE, UP, DOWN, OK
 
@@ -37,7 +36,6 @@ Normalized JSON
 NodeMCU-32S (ESP32-WROOM-32)
   ├── WeAct 2.9 inch e-paper
   ├── LCD1602 I²C
-  ├── RGB LED
   ├── Buzzer
   ├── Buttons
   └── DS3231
@@ -55,7 +53,7 @@ NodeMCU-32S (ESP32-WROOM-32)
 * Hiển thị dữ liệu.
 * Chạy Pomodoro local.
 * Quản lý trạng thái online/offline.
-* Điều khiển LED/buzzer.
+* Điều khiển buzzer.
 * Đọc DS3231.
 
 ### Cloudflare Worker
@@ -116,7 +114,7 @@ DS3231 → Clock
  ↓
 Local Timer → Pomodoro
  ↓
-E-paper / LCD1602 / RGB LED / Buzzer
+E-paper / LCD1602 / Buzzer
 ```
 
 ## 6. Quy tắc kiến trúc
@@ -147,7 +145,7 @@ Thiết bị vẫn phải:
 * Hiển thị giờ.
 * Hiển thị ngày.
 * Chạy Pomodoro.
-* Điều khiển LED/buzzer.
+* Điều khiển buzzer.
 
 Calendar mới chỉ được cập nhật khi có kết nối lại.
 

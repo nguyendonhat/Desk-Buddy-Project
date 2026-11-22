@@ -1,6 +1,6 @@
 # ESP32 Calendar firmware
 
-The production prototype connects a NodeMCU-32S to Wi-Fi, reads the DS3231, fetches normalized Calendar events from the Worker, shows date/time and connection status on the LCD1602, and provides Calendar, event-note, Pomodoro, and account screens on the WeAct 2.9-inch monochrome e-paper. It also gives a short LED/buzzer reminder for an event starting within 15 minutes.
+The production prototype connects a NodeMCU-32S to Wi-Fi, reads the DS3231, fetches normalized Calendar events from the Worker, shows date/time and connection status on the LCD1602, and provides Calendar, event-note, Pomodoro, and account screens on the WeAct 2.9-inch monochrome e-paper. It uses the buzzer for event reminders and Pomodoro transitions; the prototype omits the status LED.
 
 ## Hardware assumptions
 
@@ -9,7 +9,7 @@ The production prototype connects a NodeMCU-32S to Wi-Fi, reads the DS3231, fetc
 - LCD1602 I²C address `0x27`; change the address in `src/main.cpp` if an I²C scan reports another address.
 - DS3231 on GPIO21/22.
 - E-paper and I²C pins follow `HARDWARE_DESIGN.md`.
-- The RGB LED is assumed common-cathode and the buzzer is switched by a transistor from GPIO17.
+- The buzzer is switched by a transistor from GPIO17.
 
 ## Buttons and display pages
 

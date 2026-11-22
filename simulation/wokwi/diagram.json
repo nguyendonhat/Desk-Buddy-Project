@@ -39,15 +39,6 @@
       }
     },
     {
-      "type": "wokwi-rgb-led",
-      "id": "rgb",
-      "top": 380,
-      "left": 30,
-      "attrs": {
-        "common": "cathode"
-      }
-    },
-    {
       "type": "wokwi-buzzer",
       "id": "buzzer",
       "top": 500,
@@ -191,30 +182,6 @@
     [
       "esp:GND.1",
       "epd:GND",
-      "black",
-      []
-    ],
-    [
-      "esp:D13",
-      "rgb:R",
-      "red",
-      []
-    ],
-    [
-      "esp:D14",
-      "rgb:G",
-      "green",
-      []
-    ],
-    [
-      "esp:RX2",
-      "rgb:B",
-      "blue",
-      []
-    ],
-    [
-      "esp:GND.2",
-      "rgb:COM",
       "black",
       []
     ],

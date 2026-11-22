@@ -6,7 +6,7 @@
 - Large display: WeAct Studio 2.9-inch monochrome e-paper over SPI. The family is commonly 128×296 pixels, but the board revision/controller marking still needs checking before choosing the exact firmware driver class.
 - Small display: 16×2 character LCD with an I²C interface/backpack.
 - RTC: DS3231 breakout with a suitable backup cell.
-- Indicators and input: RGB LED, piezo buzzer, and four momentary push buttons (MODE, UP, DOWN, OK).
+- Input and alert: piezo buzzer and four momentary push buttons (MODE, UP, DOWN, OK). The current prototype omits the status LED.
 - The extra Arduino Nano boards are not needed for this prototype; the ESP32 has enough GPIO and handles Wi-Fi plus local timers.
 
 This pin map is for the classic ESP-WROOM-32 DevKit and SPI e-paper. It is not for an ESP32-S3 or WROVER board.
@@ -17,7 +17,7 @@ This pin map is for the classic ESP-WROOM-32 DevKit and SPI e-paper. It is not f
 - 16×2 LCD: show the date on row 1 and live time plus online/offline connection status on row 2. Pomodoro appears on e-paper.
 - DS3231: keep time while USB power is removed. Its coin cell powers the RTC only, not the ESP32 or displays.
 - Buttons: tap MODE to cycle Calendar, Notes, Pomodoro, and Account; MODE only changes modes and does not put the device to sleep. Calendar shows a seven-day week: UP/DOWN selects the day and OK opens its events. In Notes, UP/DOWN changes events, the e-paper alternates title/description, and OK returns to the week view. Pomodoro uses UP/DOWN to configure cycles/work/break and OK to advance setup/start. Its timer continues across mode changes. On Account, OK opens Wi-Fi setup.
-- RGB LED and buzzer: indicate focus, break, upcoming event, and timer completion.
+- Buzzer: signal Pomodoro transitions, upcoming events, and timer completion.
 
 ## Suggested ESP32-WROOM-32 DevKit pin map
 
@@ -35,9 +35,6 @@ This pin map is for the classic ESP-WROOM-32 DevKit and SPI e-paper. It is not f
 | UP button | GPIO33 | Button connects pin to GND; configure `INPUT_PULLUP` |
 | DOWN button | GPIO19 | Button connects pin to GND; configure `INPUT_PULLUP` |
 | OK button | GPIO35 | Input-only pin: add an external 10 kΩ pull-up to 3.3 V; button connects pin to GND |
-| RGB red | GPIO13 | One current-limiting resistor per LED color |
-| RGB green | GPIO14 | One current-limiting resistor per LED color |
-| RGB blue | GPIO16 | For ESP-WROOM-32; avoid GPIO16/17 on boards where PSRAM uses them |
 | Buzzer driver | GPIO17 | Drive a transistor/MOSFET, not the buzzer directly from the GPIO |
 
 The e-paper and RTC run from 3.3 V. Grounds must be common. E-paper modules vary in their header labels and power requirements; follow the exact module's pin labels and datasheet.
@@ -52,7 +49,6 @@ Many LCD backpacks are powered at 5 V and pull SDA/SCL up to 5 V, which must not
 - Take 3.3 V for the e-paper and DS3231 from the DevKit's regulated 3V3 pin, subject to the exact board/module current requirements.
 - Power the 16×2 LCD/backlight from 5 V, with the I²C level shifter described above.
 - Use a CR2032 in the DS3231 holder only if the RTC board is designed for that cell. Do not charge a CR2032. Some DS3231 clone boards have charging circuitry intended for LIR2032 cells; inspect the board and remove/disable charging circuitry before using a non-rechargeable CR2032.
-- Use a 220–330 Ω resistor in series with each discrete RGB LED color. Confirm whether the LED is common-anode or common-cathode and set the output polarity accordingly.
 - Use a small NPN transistor or logic-level MOSFET to switch the buzzer. A piezo element can be driven with a suitable transistor stage; an electromagnetic buzzer also needs a flyback diode. Verify the buzzer's rated voltage and current.
 - Never connect 5 V to an ESP32 GPIO. Never power the whole device from the RTC coin cell.
 
@@ -68,7 +64,6 @@ USB 5 V ──> ESP32 DevKit ── 3V3 ──> SPI e-paper
                   ├── 5 V ────────────────────────────────────────────> LCD VCC/backlight
                   ├── GPIO32/33/19 ──> MODE/UP/DOWN buttons to GND
                   ├── GPIO35 ──> OK button to GND (external 10 kΩ pull-up to 3.3 V)
-                  ├── GPIO13/14/16 ──> RGB LED through resistors
                   └── GPIO17 ──> transistor ──> buzzer
 
 All module grounds, transistor emitter/source, and ESP32 GND are common.
@@ -81,7 +76,7 @@ CR2032 ──> DS3231 VBAT holder (RTC backup only)
 2. Wire only the e-paper at 3.3 V and confirm its driver with a basic test screen.
 3. Add the LCD through the I²C level shifter; scan for the address and test both rows.
 4. Add DS3231 and verify time persists after disconnecting USB (the ESP32 itself will turn off).
-5. Add buttons, RGB LED, and buzzer one at a time.
+5. Add buttons and buzzer one at a time.
 6. Integrate the Calendar client after the device token is provisioned locally. Do not commit the token; a token embedded in prototype firmware can be extracted from the device.
 
 ## References

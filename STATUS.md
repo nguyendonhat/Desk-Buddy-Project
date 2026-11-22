@@ -8,7 +8,8 @@ A NodeMCU-32S desk device that uses a WeAct 2.9-inch monochrome e-paper for Goog
 
 ## Current code state
 
-- On 2026-11-22, `firmware/ESP32/src/main.cpp` was replaced with the user's `main (1).cpp`; matching SHA-256 hashes confirmed the copied file. The new source adds UTF-8-aware note line wrapping and changes several calendar/Pomodoro timings and behaviors. A firmware build was attempted but could not run because `pio` is not available in this shell; compilation and runtime behavior remain unverified.
+- On 2026-11-22, `firmware/ESP32/src/main.cpp` was replaced with the user's `main (1).cpp`; matching SHA-256 hashes confirmed the copy. The source adds UTF-8-aware note line wrapping and changes several calendar/Pomodoro timings and behaviors. LED hooks were subsequently removed per the team's hardware scope. A build of the latest source could not run because `pio` is not available in this shell; compilation and runtime behavior remain unverified.
+- The team omits the status LED; production firmware and Wokwi mock no longer initialize or use it. Buzzer alerts remain. No CAD/3D model file is present in the `main` repository tree as of 2026-11-22.
 - ESP32 firmware and Wokwi mock both exist under `firmware/ESP32` and `simulation/wokwi`.
 - Production firmware now has a seven-day (Monday–Sunday) calendar selector, selected-day event/note view with 4-second title/note alternation and 15-second return to the week, plus configurable Pomodoro cycles/work/break timing. Pomodoro continues while changing modes and has transition/completion buzzer signals. The previous firmware revision compiled; the 2026-11-22 source replacement has not compiled in this environment. Wokwi and physical behavior are unverified. Deep sleep has been removed; MODE changes screens.
 - Button pin map in firmware/docs: MODE GPIO32, UP GPIO33, DOWN GPIO19, OK GPIO35. GPIO35 requires an external 10 kΩ pull-up to 3.3 V on real hardware.

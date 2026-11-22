@@ -19,13 +19,13 @@ AI agents and contributors: start with [`AGENTS.md`](AGENTS.md) and [`STATUS.md`
 | LCD phụ | LCD1602 giao tiếp I²C (địa chỉ `0x27`) |
 | RTC | DS3231 |
 | Nút bấm | MODE (GPIO32), UP (GPIO33), DOWN (GPIO19), OK (GPIO35) |
-| LED trạng thái | RGB LED common-cathode (GPIO13/14/16) |
 | Còi | Piezo buzzer qua transistor (GPIO17) |
 
 > **GPIO35** là input-only, không có pull-up nội bộ. Mạch thật cần điện trở **10 kΩ kéo lên 3.3 V**. Không nối 5 V vào bất kỳ GPIO ESP32 nào.
 
 Xem sơ đồ chân đầy đủ và lưu ý nguồn, level-shifter LCD tại [`HARDWARE_DESIGN.md`](HARDWARE_DESIGN.md).
-Sơ đồ lắp mạch đầy đủ, gồm điện trở LED, driver buzzer, pull-up GPIO35 và phân tách I²C 3.3/5 V: [`HARDWARE_WIRING.md`](HARDWARE_WIRING.md).
+Sơ đồ lắp mạch đầy đủ, gồm driver buzzer, pull-up GPIO35 và phân tách I²C 3.3/5 V: [`HARDWARE_WIRING.md`](HARDWARE_WIRING.md).
+Repository hiện chưa có file CAD/mô hình 3D cho vỏ thiết bị.
 
 ---
 
@@ -75,7 +75,7 @@ E-paper/font hiện dùng có thể không vẽ được đầy đủ dấu ti�
 
 ### Thiết bị báo hiệu
 
-- LED RGB và buzzer dùng để báo trạng thái Pomodoro, nhắc sự kiện và hoàn tất hẹn giờ; cần tiết chế âm báo.
+- Buzzer báo chuyển trạng thái Pomodoro, nhắc sự kiện và hoàn tất hẹn giờ; cần tiết chế âm báo. Prototype hiện không lắp LED trạng thái.
 - E-paper chỉ refresh khi nội dung thay đổi, không dùng làm đồng hồ chạy từng giây.
 
 ---

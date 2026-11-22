@@ -23,6 +23,6 @@ This online simulation tests the display layout and button flow only. It does no
 
 1. Open https://wokwi.com/ and create an ESP32 project.
 2. Copy `sketch.ino`, `diagram.json`, and `libraries.txt` from this folder into the project.
-3. Start the simulation. The LCD clock and e-paper mock calendar should appear; the RGB LED turns red and the buzzer sounds when the sample event enters the reminder window.
+3. Start the simulation. The LCD clock and e-paper mock calendar should appear; the buzzer sounds when the sample event enters the reminder window.
 
 The RTC model in Wokwi is DS1307, used as a simulator substitute for the physical DS3231. The Wokwi e-paper model uses the GxEPD2_290_BS driver; the physical firmware retains the WeAct driver. The mock event is intentionally two minutes after the simulator's RTC start time. The simulation does not validate the exact WeAct panel revision, physical DS3231, Wi-Fi/TLS to the real Worker, or real-world wiring/voltage levels.

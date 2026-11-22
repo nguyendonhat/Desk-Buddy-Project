@@ -30,13 +30,14 @@ Không cần Arduino IDE cho quy trình PlatformIO trong tài liệu này. Windo
 | LCD1602 kèm backpack I²C | 1; địa chỉ mặc định trong firmware là `0x27` |
 | RTC DS3231 và pin backup phù hợp | 1 |
 | Nút nhấn momentary | 4: MODE, UP, DOWN, OK |
-| RGB LED common-cathode | 1, kèm 3 điện trở 220–330 Ω (mỗi màu một điện trở) |
 | Piezo buzzer và transistor/MOSFET driver | 1 bộ |
 | I²C level shifter hai chiều | 1 nếu LCD backpack dùng pull-up 5 V |
 | Điện trở kéo lên 10 kΩ | 1 cho nút OK ở GPIO35 |
 | Dây jumper, breadboard và nguồn USB 5 V | đủ dùng |
 
 Xem sơ đồ chân, mức điện áp, pin RTC và cách đấu buzzer trong [HARDWARE_DESIGN.md](HARDWARE_DESIGN.md) và [HARDWARE_WIRING.md](HARDWARE_WIRING.md). Không đưa 5 V vào GPIO ESP32. GPIO35 chỉ là input và cần điện trở kéo lên ngoài. Không dùng pin coin-cell để cấp nguồn cho toàn bộ thiết bị.
+
+Prototype của nhóm bỏ qua LED trạng thái; không cần mua hoặc đấu LED và điện trở RGB.
 
 ## 2. Lấy mã nguồn và kiểm tra các phần không cần credential
 
